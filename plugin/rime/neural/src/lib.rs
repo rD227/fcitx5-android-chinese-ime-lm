@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 //! The only unsafe code is the C ABI: the Rime adapter owns these NUL-terminated
 //! strings and keeps them alive until the synchronous call returns.
 use chinese_ime_lm::{CandidateFacts, Reranker, SentenceModel};

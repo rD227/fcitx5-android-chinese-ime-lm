@@ -1,5 +1,5 @@
 #!/bin/sh
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 set -eu
 cd "$(dirname "$0")"
 export PATH="$HOME/.cargo/bin:$PATH"

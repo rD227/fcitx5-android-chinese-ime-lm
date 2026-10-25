@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // Runs against the same Android prebuilt libraries as the APK. No user data.
 #include "neural-reranker.h"
 #include <rime_api.h>

@@ -110,4 +110,8 @@ adb shell pm enable org.fcitx.fcitx5.android.plugin.rime
 
 ## 授权
 
-本项目新增集成代码采用 GNU GPL-3.0-or-later，原 Fcitx5 Android 文件保留原 LGPL 声明。chinese-ime-lm 的训练工程为 GPLv3，但作者将 `reference/` 推理实现和发布的模型单独授权为 Apache-2.0；本项目使用这两部分并保留其 LICENSE、NOTICE。Rime 内部头文件为 BSD-3-Clause。来源、版本与模型校验值见 [UPSTREAM.md](UPSTREAM.md)。
+原创神经重排集成代码采用 [MIT](LICENSE)，包括本目录内新增的适配层、Rust C ABI、构建脚本、测试和文档，不覆盖 `vendor/`。Fcitx5 Android 原文件及其修改保留原 LGPL 声明，根目录 `LICENSE` 保留上游 LGPL 文本。
+
+chinese-ime-lm 的训练工程为 GPLv3，但作者将本项目使用的 `reference/` 推理实现和发布的模型单独授权为 Apache-2.0；其 LICENSE、NOTICE 和模型内的语料署名保持不变。Rime 头文件保留 BSD-3-Clause，Android prebuilder 补丁保留原始来源。其他上游组件和词库继续适用各自的许可证。
+
+完整仓库和 APK 包含多种授权，不能统一声明为 MIT。范围见根目录 [NOTICE](../../../NOTICE)，来源、版本与模型校验值见 [UPSTREAM.md](UPSTREAM.md)。构建时将本集成的 MIT LICENSE、总 NOTICE、LGPL 文本和 Rime BSD 文本一并放入 APK 资源。

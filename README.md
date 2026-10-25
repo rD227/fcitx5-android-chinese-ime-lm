@@ -1,6 +1,6 @@
 # fcitx5-android
 
-**关于许可证：上游一个是GPL一个是LGPL所有用这个没问题吧（不过另外一个是一部分GPL一部分alpha**
+**许可证：新增神经重排集成代码采用 [MIT](plugin/rime/neural/LICENSE)；Fcitx5 Android 原代码及其修改保留 LGPL，第三方推理实现和权重保留 Apache-2.0，Rime 头文件保留 BSD-3-Clause。完整仓库和 APK 包含多种授权，范围见 [NOTICE](NOTICE)。**
 
 此分支增加 Rime 离线中文候选重排插件，构建、启用和授权说明见 [Chinese IME LM](plugin/rime/neural/README.md)。下文保留上游项目介绍和下载链接；上游 APK 不包含本分支的新滤镜。
 

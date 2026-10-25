@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 use std::ffi::CString;
 use rime_chinese_ime_lm::{cime_best, cime_free, cime_load};
 

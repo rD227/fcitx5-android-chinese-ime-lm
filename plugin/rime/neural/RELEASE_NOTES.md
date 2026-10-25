@@ -37,6 +37,6 @@
 
 ## 授权与源码
 
-新增集成代码：GNU GPL-3.0-or-later。上游 Fcitx5 Android 文件保留 LGPL 声明；推理参考实现和权重保留 Apache-2.0，Rime 头文件保留 BSD-3-Clause。
+原创神经重排集成代码采用 [MIT](LICENSE)。上游 Fcitx5 Android 文件及其修改保留 LGPL 声明；推理参考实现和权重保留 Apache-2.0，Rime 头文件保留 BSD-3-Clause，其他组件和词库保留各自授权。完整 APK 包含多种授权，范围见根目录 [NOTICE](../../../NOTICE)。
 
 源码仓库：https://github.com/rD227/fcitx5-android-chinese-ime-lm

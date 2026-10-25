@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 $ErrorActionPreference = 'Stop'
 $modelDirectory = Join-Path $PSScriptRoot 'model'
 $modelPath = Join-Path $modelDirectory 'sentence-model.safetensors'

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 set(NEURAL_DIR "${CMAKE_CURRENT_LIST_DIR}")
 set(NEURAL_RUST_ARCHIVE "${NEURAL_DIR}/target/aarch64-linux-android/release/librime_chinese_ime_lm.a")
 if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
@@ -75,6 +75,15 @@ set_property(TARGET rime PROPERTY SOURCES "${ENGINE_SOURCES}")
 target_sources(rime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/rimeengine-neural.cpp")
 target_include_directories(rime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/fcitx5-rime/src")
 
+install(FILES "${NEURAL_DIR}/LICENSE"
+    "${NEURAL_DIR}/../../../NOTICE"
+    "${NEURAL_DIR}/../../../LICENSES/LGPL-2.1.txt"
+    DESTINATION "${FCITX_INSTALL_DATADIR}/rime-data/rime-chinese-ime-lm"
+    COMPONENT prebuilt-assets)
+install(FILES "${NEURAL_DIR}/vendor/librime/LICENSE"
+    DESTINATION "${FCITX_INSTALL_DATADIR}/rime-data/rime-chinese-ime-lm"
+    RENAME "RIME-BSD-3-Clause.txt"
+    COMPONENT prebuilt-assets)
 install(FILES "${NEURAL_DIR}/vendor/chinese-ime-lm/LICENSE"
     "${NEURAL_DIR}/vendor/chinese-ime-lm/NOTICE"
     DESTINATION "${FCITX_INSTALL_DATADIR}/rime-data/chinese-ime-lm"
