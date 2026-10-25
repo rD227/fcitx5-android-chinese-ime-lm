@@ -131,7 +131,7 @@ class DataDescriptorPlugin : Plugin<Project> {
                     ?: mutableMapOf()
 
             fun File.allParents(): List<File> =
-                if (parentFile == null || parentFile.path in map)
+                if (parentFile == null || parentFile.invariantSeparatorsPath in map)
                     listOf()
                 else
                     listOf(parentFile) + parentFile.allParents()
@@ -150,7 +150,7 @@ class DataDescriptorPlugin : Plugin<Project> {
             // calculate dirs
             inputDir.asFileTree.forEach {
                 it.relativeTo(file.parentFile).allParents().forEach { p ->
-                    map[p.path] = ""
+                    map[p.invariantSeparatorsPath] = ""
                 }
             }
             serialize(map.toSortedMap(), symlinks.get())
