@@ -4,7 +4,7 @@
 
 本分支为官方 Fcitx5 Android 的 Rime 插件加入 chinese-ime-lm 离线候选重排。原版 Android 主程序保持不变；新增功能编译在独立包名的增强版 Rime 插件中。
 
-- 原创神经重排集成代码使用 MIT，许可证位于 `plugin/rime/neural/LICENSE`，不覆盖 `vendor/`。Fcitx5 Android 原文件及其修改保留原 LGPL；保留其他依赖的授权和署名，不得将完整仓库或 APK 统一标为 MIT。授权范围见根目录 `NOTICE`。
+- 原创神经重排集成代码使用 MIT，许可证位于 `plugin/rime/neural/LICENSE`，不覆盖 `vendor/`。根目录 `LICENSE-MIT` 为方便 GitHub 识别的相同副本，维护时保持两份内容一致。Fcitx5 Android 原文件及其修改保留原 LGPL；保留其他依赖的授权和署名，不得将完整仓库或 APK 统一标为 MIT。授权范围见根目录 `NOTICE`。
 - 新 Android/JVM 文件优先 Kotlin，现有 Java 文件保持原语言，避免无关重构。
 - 使用简体中文说明实现、验证结果和限制。
 - 先确定根因和违反的约束，再修改。不得用猜测偏移、吞异常、空值回退掩盖原生 ABI 问题。

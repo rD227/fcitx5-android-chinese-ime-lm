@@ -3,7 +3,8 @@ fcitx5-android-chinese-ime-lm
 License scope
 
 Original code and documentation written for this fork's neural integration are
-licensed under MIT; see plugin/rime/neural/LICENSE. This covers the new adapter,
+licensed under MIT; see LICENSE-MIT and plugin/rime/neural/LICENSE (identical
+copies; the root copy supports license discovery). This covers the new adapter,
 C ABI bridge, build/download scripts, tests, and fork-specific documentation.
 It excludes vendor/ and does not relicense upstream-derived files.
 
