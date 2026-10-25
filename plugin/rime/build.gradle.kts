@@ -7,15 +7,21 @@ plugins {
     id("org.fcitx.fcitx5.android.fcitx-component")
 }
 
+val rimeNeural = providers.gradleProperty("rimeNeural").map(String::toBoolean).getOrElse(false)
+
 android {
     namespace = "org.fcitx.fcitx5.android.plugin.rime"
 
     defaultConfig {
         applicationId = "org.fcitx.fcitx5.android.plugin.rime"
+        if (rimeNeural) {
+            applicationId = "org.fcitx.fcitx5.android.plugin.rime.neural"
+        }
 
         @Suppress("UnstableApiUsage")
         externalNativeBuild {
             cmake {
+                arguments("-DRIME_NEURAL=${if (rimeNeural) "ON" else "OFF"}")
                 targets(
                     "rime"
                 )
@@ -29,11 +35,11 @@ android {
 
     buildTypes {
         release {
-            resValue("string", "app_name", "@string/app_name_release")
+            resValue("string", "app_name", if (rimeNeural) "Fcitx5 (Rime · Chinese IME LM)" else "@string/app_name_release")
             proguardFile("proguard-rules.pro")
         }
         debug {
-            resValue("string", "app_name", "@string/app_name_debug")
+            resValue("string", "app_name", if (rimeNeural) "Fcitx5 (Rime · Chinese IME LM)" else "@string/app_name_debug")
         }
     }
 

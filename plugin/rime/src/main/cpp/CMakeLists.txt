@@ -39,6 +39,10 @@ set(RIME_TARGET $<LINK_LIBRARY:WHOLE_ARCHIVE,Rime_static>)
 set(RIME_DATA_DIR "${CMAKE_INSTALL_DATADIR}/rime-data")
 add_subdirectory(fcitx5-rime)
 
+if(RIME_NEURAL)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/../../../neural/CMakeLists.txt")
+endif()
+
 install(FILES
         "default.yaml"
         "rime-essay/essay.txt"
