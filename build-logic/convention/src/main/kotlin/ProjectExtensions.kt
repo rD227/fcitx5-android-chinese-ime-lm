@@ -10,6 +10,7 @@ import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.kotlin.dsl.the
 import java.io.File
+import java.util.Properties
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -33,10 +34,24 @@ val Project.cleanTask: Task
     get() = tasks.getByName("clean")
 
 val Project.cmakeVersion
-    get() = ep("CMAKE_VERSION", "cmakeVersion") { Versions.defaultCMake }
+    get() = ep("CMAKE_VERSION", "cmakeVersion") {
+        localBuildProperty("cmakeVersion") ?: Versions.defaultCMake
+    }
 
 val Project.ndkVersion
-    get() = ep("NDK_VERSION", "ndkVersion") { Versions.defaultNDK }
+    get() = ep("NDK_VERSION", "ndkVersion") {
+        localBuildProperty("ndkVersion") ?: Versions.defaultNDK
+    }
+
+// Android Studio sync does not inherit overrides from a separate shell session.
+// Keep machine-specific toolchain choices in the project's ignored local file.
+fun Project.localBuildProperty(name: String): String? {
+    val contents = providers.fileContents(rootProject.layout.projectDirectory.file("local.properties"))
+        .asText.orNull ?: return null
+    val properties = Properties()
+    properties.load(contents.reader())
+    return properties.getProperty(name)
+}
 
 val Project.buildToolsVersion
     get() = ep("BUILD_TOOLS_VERSION", "buildTools") { Versions.defaultBuildTools }

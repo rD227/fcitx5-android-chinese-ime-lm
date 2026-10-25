@@ -84,6 +84,8 @@
 
 ## 必须验证的项目
 
+- 先确认报错日志中的 ABI，使用同一 ABI 验证修复；arm64 构建通过不能证明 x86 链接正常。
+- 同一检出目录不要并行运行 ABI 选择不同的 Gradle 构建。Android Studio 与命令行共用按 variant 保存的 Prefab 发布元数据；需要同时验证不同 ABI 集合时使用独立检出目录，避免把动态库依赖覆盖为仅含头文件的目标。
 - 上游 Rust 测试与真实权重的 `ffi-smoke`。
 - `candidate-policy.cpp`：整键、前缀、补全、不同汉字长度和分段边界。
 - Android `rime-neural-smoke`：真实 Rime 初始化和滤镜构造、句子提升、词典首选保护、超过九项的候选尾部、选词上屏。

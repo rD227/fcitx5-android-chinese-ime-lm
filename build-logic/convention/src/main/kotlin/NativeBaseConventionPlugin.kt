@@ -27,8 +27,17 @@ open class NativeBaseConventionPlugin : Plugin<Project> {
                         arguments(
                             "-DANDROID_STL=c++_shared",
                             "-DVERSION_NAME=${Versions.baseVersionName}",
-                            "-DPREBUILT_DIR=${prebuiltDir.absolutePath}"
+                            "-DPREBUILT_DIR=${prebuiltDir.invariantSeparatorsPath}"
                         )
+                        target.localBuildProperty("gettext.msgmerge")?.let {
+                            arguments("-DGETTEXT_MSGMERGE_EXECUTABLE=$it")
+                        }
+                        target.localBuildProperty("gettext.msgfmt")?.let {
+                            arguments("-DGETTEXT_MSGFMT_EXECUTABLE=$it")
+                        }
+                        target.localBuildProperty("ecm.dir")?.let {
+                            arguments("-DECM_DIR=$it")
+                        }
                     }
                 }
             }

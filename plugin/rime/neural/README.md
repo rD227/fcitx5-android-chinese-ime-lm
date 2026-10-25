@@ -19,6 +19,14 @@ git submodule update --init --depth 1 lib/fcitx5/src/main/cpp/fcitx5 lib/fcitx5/
 pwsh -File plugin/rime/neural/download-model.ps1
 ```
 
+上面的初始化命令仅准备独立 Rime 插件。若在 Android Studio 中构建 `app` 主程序，或构建全部模块，还需初始化其余子模块及嵌套依赖：
+
+```powershell
+git submodule update --init --recursive --depth 1
+```
+
+未初始化时，`fcitx5-lua`、`libime` 等目录为空，会报 `does not contain a CMakeLists.txt file`；`kenlm` 目标不存在是 libime 未加载后的连带错误。
+
 在 Linux/WSL 中：
 
 ```sh
@@ -27,15 +35,40 @@ sh plugin/rime/neural/build-rust.sh --test
 cargo run --manifest-path plugin/rime/neural/Cargo.toml --release --example ffi-smoke -- plugin/rime/neural/model/sentence-model.safetensors
 ```
 
-在项目根目录的 `local.properties` 配置 `sdk.dir`；使用 SDK 以外的 CMake 时另填 `cmake.dir`，指向包含 `bin/cmake.exe` 的目录。需要 CMake 3.24 以上；本次使用 4.3.1。PowerShell 示例：
+在项目根目录的 `local.properties` 配置 `sdk.dir`；使用 SDK 以外的 CMake 时另填 `cmake.dir`，指向包含 `bin/cmake.exe` 的目录。需要 CMake 3.24 以上；本次使用 4.3.1。
+
+Android Studio 同步时，可在该文件保存本机已安装的工具链版本。本项目构建逻辑支持以下两个版本键，避免依赖单独命令行窗口里的环境变量；`local.properties` 不提交到 Git：
+
+```properties
+ndkVersion=28.2.13676358
+cmakeVersion=4.3.1
+```
+
+优先级为环境变量、Gradle 项目属性、本机 `local.properties`、仓库默认版本。`cmake.dir` 必须与指定的 CMake 版本对应。
+
+如果 Android Studio 找不到 Gettext 或 ECM，可在同一个 `local.properties` 中显式指定路径（改为自己的安装位置）：
+
+```properties
+gettext.msgmerge=C:/Tools/gettext/bin/msgmerge.exe
+gettext.msgfmt=C:/Tools/gettext/bin/msgfmt.exe
+ecm.dir=C:/Tools/ecm/share/ECM/cmake
+```
+
+前两项指向本机构建工具的可执行文件，`ecm.dir` 指向包含 `ECMConfig.cmake` 的目录；构建逻辑会把这些值传给 CMake。未配置时沿用 CMake 的环境变量和 PATH 查找。Android Studio 进程不会自动继承启动后新增的 Windows 环境变量；日志已成功识别 NDK Clang 时，不需要额外安装或添加主机 Clang。
+
+Android Studio 的 Gradle JDK 可选择 `GRADLE_LOCAL_JAVA_HOME`，在本机 `.gradle/config.properties` 中用 `java.home` 指向完整安装的 JDK 21。IDE 的 JDK 与终端的 `JAVA_HOME` 分别配置；检查所选目录中确实存在 `bin/java.exe` 和 `bin/javac.exe`。
+
+命令行也可继续使用：
 
 ```powershell
 $env:NDK_VERSION = '28.2.13676358'
 $env:CMAKE_VERSION = '4.3.1'
 $env:BUILD_ABI = 'arm64-v8a'
-# 设置 JAVA_HOME、ECM_DIR，并将 gettext/bin 加入 PATH。
+# 设置 JAVA_HOME；若未在 local.properties 中配置工具路径，设置 ECM_DIR 并将 gettext/bin 加入 PATH。
 .\gradlew.bat :plugin:rime:assembleRelease '-PrimeNeural=true' --max-workers=2
 ```
+
+同一工作目录不要同时运行 ABI 选择不同的 Gradle 构建。命令行的 `BUILD_ABI` 与 Android Studio 的架构选择应保持一致：各次构建共用按 variant 保存的 Prefab 发布元数据，混用时可能把原生依赖生成为只有头文件的目标，导致链接缺少 `libFcitx5Core.so` 等库。发生后应结束并行构建，再用所需的完整 ABI 集合重新执行 Gradle 构建。
 
 APK 位于 `plugin/rime/build/outputs/apk/release/`，需使用自己的密钥签名。独立包名为 `org.fcitx.fcitx5.android.plugin.rime.neural`。必须构建 Release：Debug 插件会寻找 Debug 版主程序。
 
