@@ -1,0 +1,13 @@
+fcitx5-android-chinese-ime-lm
+
+This fork's additions are licensed under GNU GPL version 3 or later; see LICENSE.
+The original fcitx5-android files retain their copyright notices and LGPL-2.1
+terms (including "or later" where stated). The original license is preserved at
+LICENSES/LGPL-2.1.txt.
+
+The vendored chinese-ime-lm reference implementation and published model weights
+are separately licensed by their author under Apache-2.0. Their LICENSE, NOTICE,
+upstream commit and model checksum accompany the integration under
+plugin/rime/neural/. The training pipeline is not included in this fork.
+
+Rime internal headers retain the Rime Developers' BSD-3-Clause license.
