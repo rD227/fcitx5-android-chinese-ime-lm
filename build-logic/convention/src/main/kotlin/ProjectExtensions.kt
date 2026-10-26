@@ -59,6 +59,7 @@ val Project.buildToolsVersion
 val Project.buildVersionName
     get() = ep("BUILD_VERSION_NAME", "buildVersionName") {
         runCmd("git describe --tags --long --always", Versions.baseVersionName)
+            .replaceFirst(Regex("^\\d+\\.\\d+\\.\\d+"), Versions.baseVersionName)
     }
 
 val Project.buildCommitHash
