@@ -208,11 +208,12 @@ int checkSpellings(const std::string &cases) {
             require(weighted, "Correction distance lost before dictionary/poet scoring");
         }
         ++count;
-        covered += found;
+        covered += found == (kind != "reject");
         std::cout << "SPELLING input=" << input << " expected=" << expected
-                  << " covered=" << found << " distance=" << distance << std::endl;
+                  << " covered=" << found << " distance=" << distance
+                  << " wanted=" << (kind != "reject") << std::endl;
     }
-    std::cout << "SPELLINGS covered=" << covered << " total=" << count << std::endl;
+    std::cout << "SPELLINGS passed=" << covered << " total=" << count << std::endl;
     require(count > 0, "No spelling cases read");
     return covered == count ? 0 : 1;
 }
@@ -326,6 +327,10 @@ int main(int argc, char **argv) {
     std::filesystem::create_directories(scratch + "/build");
     writeSchema(scratch, "baseline", false);
     writeSchema(scratch, "neural", true);
+    writeSchema(scratch, "disabled", true);
+    std::ofstream(scratch + "/disabled.schema.yaml", std::ios::app) <<
+        "chinese_ime_lm:\n  enable_reranking: false\n"
+        "  enable_sentence_alternatives: false\n  aggressive: false\n";
     std::ofstream(scratch + "/default.yaml") <<
         "config_version: '1'\nschema_list:\n  - schema: baseline\n";
 
@@ -345,6 +350,7 @@ int main(int argc, char **argv) {
         "neural_fixture", new rime::Component<FixtureTranslator>());
     require(api->deploy_schema((scratch + "/baseline.schema.yaml").c_str()), "Deploy baseline failed");
     require(api->deploy_schema((scratch + "/neural.schema.yaml").c_str()), "Deploy neural failed");
+    require(api->deploy_schema((scratch + "/disabled.schema.yaml").c_str()), "Deploy disabled failed");
     const auto session = api->create_session();
     require(session != 0, "Cannot create Rime session");
     require(api->select_schema(session, "baseline"), "Cannot select baseline");
@@ -371,6 +377,16 @@ int main(int argc, char **argv) {
     std::cout << "RSS before_kb=" << before << " loaded_kb=" << loaded
               << " after_inference_kb=" << after << " delta_kb=" << after - before
               << std::endl;
+    require(api->select_schema(session, "disabled"), "Cannot select disabled fixture");
+    check(api, session, "abc", "今天天气真号");
+    api->clear_composition(session);
+    for (const char key : std::string("expand")) api->process_key(session, key, 0);
+    RIME_STRUCT(RimeContext, disabledContext);
+    require(api->get_context(session, &disabledContext), "Cannot read disabled fixture");
+    require(disabledContext.menu.num_candidates == 2 &&
+            std::string(disabledContext.menu.candidates[0].text) == "我在用用看",
+            "Custom false flags did not disable reranking/expansion");
+    api->free_context(&disabledContext);
     api->destroy_session(session);
     api->finalize();
     std::cout << "PASS: filter ABI, generated sentence promotion, dictionary protection, "

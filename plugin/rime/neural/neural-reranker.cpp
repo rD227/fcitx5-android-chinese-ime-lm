@@ -40,14 +40,18 @@ std::string sharedDataDirectory;
 class NeuralCorrectorComponent final : public rime::Corrector::Component {
 public:
     rime::Corrector *Create(const rime::Ticket &ticket) override {
-        bool transpositions = false, neighbors = false;
+        chinese_ime_lm::TypingCorrectionOptions options;
         if (ticket.schema) {
-            ticket.schema->config()->GetBool("chinese_ime_lm/enable_transposition", &transpositions);
-            neighbors = transpositions;  // Existing enhanced configurations opt in.
-            ticket.schema->config()->GetBool("chinese_ime_lm/enable_keyboard_neighbors", &neighbors);
+            auto *config = ticket.schema->config();
+            config->GetBool("chinese_ime_lm/enable_transposition", &options.transpositions);
+            options.neighbors = options.transpositions;  // Preserve existing opt-in behavior.
+            config->GetBool("chinese_ime_lm/enable_keyboard_neighbors", &options.neighbors);
+            config->GetBool("chinese_ime_lm/enable_native_correction", &options.native);
+            config->GetBool("chinese_ime_lm/enable_multiple_typos", &options.multiple);
+            config->GetBool("chinese_ime_lm/enable_distant_neighbors", &options.distant);
         }
-        return transpositions || neighbors
-            ? static_cast<rime::Corrector *>(new chinese_ime_lm::TypingCorrector(transpositions, neighbors))
+        return options.transpositions || options.neighbors || !options.native
+            ? static_cast<rime::Corrector *>(new chinese_ime_lm::TypingCorrector(options))
             : new rime::NearSearchCorrector;
     }
 };
@@ -83,11 +87,18 @@ private:
 class ChineseImeLmFilter final : public rime::Filter {
 public:
     explicit ChineseImeLmFilter(const rime::Ticket &ticket) : Filter(ticket) {
+        // Unaliased Rime filters receive the generic "filter" namespace.
+        // Our documented custom.yaml settings belong to this component;
+        // explicit aliases continue to select their own configuration section.
+        if (name_space_ == "filter") name_space_ = "chinese_ime_lm";
         engine_->schema()->config()->GetBool(name_space_ + "/aggressive", &aggressive_);
+        engine_->schema()->config()->GetBool(name_space_ + "/enable_reranking", &reranking_);
+        engine_->schema()->config()->GetBool(name_space_ + "/enable_sentence_alternatives", &alternatives_);
         auto clear = [this](rime::Context *) { decoderCache_.Clear(); };
         committed_ = engine_->context()->commit_notifier().connect(clear);
         aborted_ = engine_->context()->abort_notifier().connect(clear);
         deleted_ = engine_->context()->delete_notifier().connect(clear);
+        if (!reranking_ && !aggressive_) return;
         std::string modelName;
         const bool customModel = engine_->schema()->config()->GetString(
             name_space_ + "/model", &modelName);
@@ -110,7 +121,8 @@ public:
 
     rime::an<rime::Translation> Apply(rime::an<rime::Translation> source,
                                      rime::CandidateList *) override {
-        if (!model_ || source->exhausted()) {
+        if (((reranking_ || aggressive_) && !model_) || source->exhausted() ||
+            (!reranking_ && !alternatives_ && !aggressive_)) {
             return source;
         }
         const auto *ctx = engine_->context();
@@ -132,7 +144,8 @@ public:
         }
         // Only already-selected segments of this composition are used as context.
         const auto context = ctx->composition().GetTextBefore(first->start());
-        chinese_ime_lm::appendSentenceAlternatives(candidates, kCandidateCount - 1);
+        if (alternatives_)
+            chinese_ime_lm::appendSentenceAlternatives(candidates, kCandidateCount - 1);
         std::vector<const char *> texts;
         for (const auto &candidate : candidates) {
             auto origin = rime::Candidate::GetGenuineCandidate(candidate);
@@ -143,8 +156,8 @@ public:
         }
         // Only already-selected segments of this composition are used as context.
         // This does not read the clipboard, other apps, or previous input fields.
-        const int promoted = cime_best(model_.get(), context.c_str(), texts.data(),
-                                       facts.data(), texts.size());
+        const int promoted = reranking_ ? cime_best(model_.get(), context.c_str(), texts.data(),
+                                                   facts.data(), texts.size()) : 0;
         if (promoted < 0 || static_cast<size_t>(promoted) >= candidates.size()) {
             __android_log_print(ANDROID_LOG_ERROR, kLogTag, "invalid inference result");
         } else if (promoted > 0) {
@@ -171,6 +184,8 @@ public:
 
 private:
     bool aggressive_ = true;
+    bool reranking_ = true;
+    bool alternatives_ = true;
     chinese_ime_lm::DecoderCache decoderCache_;
     rime::connection committed_, aborted_, deleted_;
     struct Deleter { void operator()(void *handle) const { cime_free(handle); } };

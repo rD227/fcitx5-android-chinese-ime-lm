@@ -50,3 +50,4 @@ neighbor	rwn	ren
 neighbor	nri	nei
 # Multi-syllable zuiwanle -> zuowanle corrects this one full syllable.
 neighbor	zui	zuo
+neighbor	je	ke
