@@ -1,0 +1,10 @@
+diff --git a/src/rime/algo/syllabifier.h b/src/rime/algo/syllabifier.h
+index 1167e296..0ebbddc0 100644
+--- a/src/rime/algo/syllabifier.h
++++ b/src/rime/algo/syllabifier.h
+@@ -61,0 +62,5 @@ class Syllabifier {
++  // Local integration: read-only access for distance-weighted graph edges.
++  // Inline nonvirtual accessors do not change the pinned class layout.
++  Corrector* corrector() const { return corrector_; }
++  const string& delimiters() const { return delimiters_; }
++

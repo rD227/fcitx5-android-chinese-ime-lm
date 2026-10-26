@@ -1,9 +1,11 @@
 # Rime Chinese IME LM（实验版）
 
-为 Fcitx5 Android 的 Rime 增加离线中文候选重排。沿用现有拼音方案、词库和候选对象；使用 chinese-ime-lm 的 4M 模型，在生成整句时比较前九个候选。它不会生成新的候选，也不处理 Sayboard 的语音识别。
+为 Fcitx5 Android 的 Rime 增加离线中文候选重排。沿用现有拼音方案和词库，使用 chinese-ime-lm 的 4M 模型比较最多九个整句候选。对于自动组句，可复用同一拼音路径上的词条补充同音整句候选；不处理 Sayboard 的语音识别。
 
 - 只比较覆盖同一段完整输入的候选，允许候选中文字数不同。
 - 保留词典整词首选，不改变补全、前缀或非 `abc` 分段。
+- 可选的通用相邻字母颠倒纠错见 [纠错方法和实测限制](CORRECTION.md)。当前权重未重新训练。
+- `0.1.4` 增加跨排邻键、每音节两步键盘纠错，以及沿真实拼音路径组合完整候选的束搜索；现有首选排序保留，新组合放在其后供选择。
 - 使用当前组合中已选中的前文作为上下文，不读取剪贴板或其他应用的文字。
 - 日志标签 `ChineseImeLm` 记录模型加载、重排索引和推理耗时，不记录输入文本。
 - 暂支持 `arm64-v8a`，原版主程序无需修改。插件基于 `048f581c`，应搭配同版本主程序；升级原生库时需重新核对 Rime 头文件和 Fcitx ABI。
@@ -89,11 +91,65 @@ adb shell pm disable-user --user 0 org.fcitx.fcitx5.android.plugin.rime
 patch:
   "engine/filters/@before last": chinese_ime_lm
   translator/enable_correction: true  # 可选：让 Rime 生成邻键误击的纠错候选
+  chinese_ime_lm/enable_native_correction: true  # Rime 自带的同排邻键搜索
+  chinese_ime_lm/enable_transposition: true  # 本增强版插件：全拼相邻字母颠倒
+  chinese_ime_lm/enable_keyboard_neighbors: true  # 通用 QWERTY 邻键，包含跨排近键
+  chinese_ime_lm/enable_multiple_typos: true  # 同一音节两处邻键误按，例如 mro → mei
+  chinese_ime_lm/enable_distant_neighbors: true  # 一处跨两步键位，例如 vi → xi
+  chinese_ime_lm/enable_reranking: true  # 4M 模型比较已有完整候选
+  chinese_ime_lm/enable_sentence_alternatives: true  # 同音前缀词条扩展
+  chinese_ime_lm/aggressive: true  # 更积极生成完整组合候选，默认开启
 ```
 
 将这一项合并到已有 `patch:`，不要覆盖原有设置。自定义滤镜顺序时，把 `chinese_ime_lm` 放在 `uniquifier` 前、文字转换滤镜后。随后重新部署 Rime 并重启 Fcitx 实例。可用 `adb logcat -s ChineseImeLm` 检查模型加载和推理。
 
-内置纠错负责产生替代拼写的候选，小模型负责比较可比候选；模型本身不直接将拼音改写成汉字。现有手写规则可与其共存，按使用者需要逐项调整，不要整体覆盖或注释配置。
+内置纠错负责产生替代拼写，小模型比较汉字候选；模型本身不直接改写拼音。新增设置需要本增强插件，原版插件不实现它们。当前不支持通用插入、删除或任意多字母换位。现有手写规则可共存，不要整体覆盖或注释配置。
+
+### 每项功能都可独立关闭
+
+在**当前方案**的 `.custom.yaml` 中，将对应项明确写为 `false`，然后重新部署方案并重启 Fcitx 实例。以雾凇为例，文件为 `rime_ice.custom.yaml`；应合并到同一个已有的 `patch:` 中。
+
+下表省略共同前缀 `chinese_ime_lm/`：
+
+| 设置 | 未指定时 | 作用 |
+| --- | --- | --- |
+| `enable_native_correction` | `true` | 保留 Rime 自带的同排邻键搜索 |
+| `enable_transposition` | `false` | 一次相邻字母交换，如 `suhang → shuang` |
+| `enable_keyboard_neighbors` | 跟随 `enable_transposition` | 按 QWERTY 位置搜索同排和跨排邻键 |
+| `enable_multiple_typos` | `true` | 邻键搜索内允许两处各一步误按，如 `cue → xie`、`shwbg → sheng` |
+| `enable_distant_neighbors` | `true` | 邻键搜索内允许一处距离为两步的误按，如 `vi → xi` |
+| `enable_reranking` | `true` | 模型重排原有完整候选 |
+| `enable_sentence_alternatives` | `true` | 用同音前缀词条补充完整句子，参与原有重排 |
+| `aggressive` | `true` | 重新组合词典分词，补充完整候选供选择 |
+
+`enable_multiple_typos` 和 `enable_distant_neighbors` 只控制 `enable_keyboard_neighbors` 的扩展搜索。原生同排纠错是另一条搜索路径；要单独试用新增类型，可同时设置 `enable_native_correction: false`。`enable_keyboard_neighbors` 和 `enable_transposition` 都关、原生纠错仍开时，沿用原版 Rime 搜索行为。
+
+**关闭所有算法拼写纠错：**
+
+```yaml
+patch:
+  translator/enable_correction: false
+```
+
+**同时关闭模型重排和两种整句扩展：**
+
+```yaml
+patch:
+  translator/enable_correction: false
+  chinese_ime_lm/enable_reranking: false
+  chinese_ime_lm/enable_sentence_alternatives: false
+  chinese_ime_lm/aggressive: false
+```
+
+以上开关不会移除你在 `speller/algebra` 中手写的 `derive` 等规则；这些规则仍由方案本身执行。自定义滤镜别名如 `chinese_ime_lm@my_lm` 时，滤镜的模型和组句设置写在 `my_lm/` 下；拼写纠错设置仍在 `chinese_ime_lm/` 下。
+
+`n/m`、`y/u`、`i/o`、`j/k` 已在原生同排邻键表中；扩展搜索也覆盖 `j/n`、`s/x` 等跨排近键。`nri → nei` 是 `e` 误打为 `r`。额外搜索只扩展原方案不能接受的片段；两步搜索至少保留一个原字母，且比一步纠错受到更大惩罚。两步不是任意替换两个字母，详见 [纠错实现与实测](CORRECTION.md)。
+
+`haijeyi` 在不含个人手写纠错规则的方案副本中已能首选“还可以”。`suhang` 同时存在合法的 `su'hang` 和交换后的 `shuang` 路径：交换检查会执行，但不能保证“爽/双”排在“苏杭”等解释之前。显式的 `'` 分隔符不会被跨越。
+
+`aggressive` 控制完整组合候选生成，不改变原有首选决定。它复用系统词典和用户词典，保留 4 条中间路径、最多 32 条完整组合，并缓存同一组合中的前缀；提交、取消和删词会清空缓存。老设备上会增加按键耗时，可设为 `false` 关闭。`wozaidadianzi` 已能生成“我再打点字”，但目前仍排得较后，不能保证首选正确。
+
+增强插件的“插件描述”中提供本仓库地址与配置入口，支持中文和英文，点按描述可复制。此次资源已通过 Android 资源编译；完整 APK 中的显示待打包安装复核。
 
 ## 验证记录
 
