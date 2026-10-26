@@ -4,6 +4,7 @@
 #include "sentence-alternatives.h"
 #include "typing-corrector.h"
 #include "sentence-decoder.h"
+#include "mixed-abbreviations.h"
 
 #include <algorithm>
 #include <chrono>
@@ -94,6 +95,7 @@ public:
         engine_->schema()->config()->GetBool(name_space_ + "/aggressive", &aggressive_);
         engine_->schema()->config()->GetBool(name_space_ + "/enable_reranking", &reranking_);
         engine_->schema()->config()->GetBool(name_space_ + "/enable_sentence_alternatives", &alternatives_);
+        engine_->schema()->config()->GetBool(name_space_ + "/enable_mixed_abbreviations", &mixedAbbreviations_);
         auto clear = [this](rime::Context *) { decoderCache_.Clear(); };
         committed_ = engine_->context()->commit_notifier().connect(clear);
         aborted_ = engine_->context()->abort_notifier().connect(clear);
@@ -121,6 +123,20 @@ public:
 
     rime::an<rime::Translation> Apply(rime::an<rime::Translation> source,
                                      rime::CandidateList *) override {
+        if (source->exhausted()) return source;
+        if (mixedAbbreviations_) {
+            const auto first = source->Peek();
+            const auto &input = engine_->context()->input();
+            if (first->end() == input.size()) {
+                auto extra = chinese_ime_lm::mixedAbbreviationPhrases(first,
+                    input.substr(first->start(), first->end() - first->start()));
+                if (!extra.empty()) {
+                    source->Next();
+                    extra.insert(extra.begin(), first);
+                    return rime::New<BufferedTranslation>(std::move(extra), std::move(source));
+                }
+            }
+        }
         if (((reranking_ || aggressive_) && !model_) || source->exhausted() ||
             (!reranking_ && !alternatives_ && !aggressive_)) {
             return source;
@@ -186,6 +202,7 @@ private:
     bool aggressive_ = true;
     bool reranking_ = true;
     bool alternatives_ = true;
+    bool mixedAbbreviations_ = true;
     chinese_ime_lm::DecoderCache decoderCache_;
     rime::connection committed_, aborted_, deleted_;
     struct Deleter { void operator()(void *handle) const { cime_free(handle); } };

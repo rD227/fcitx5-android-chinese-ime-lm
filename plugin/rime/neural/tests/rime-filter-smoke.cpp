@@ -3,6 +3,7 @@
 #include "neural-reranker.h"
 #include "sentence-alternatives.h"
 #include "sentence-decoder.h"
+#include "mixed-abbreviations.h"
 #include <rime_api.h>
 #include <rime/candidate.h>
 #include <rime/component.h>
@@ -75,6 +76,11 @@ public:
 };
 
 void checkAlternatives() {
+    chinese_ime_lm::MixedAbbreviationSyllabifier mixed(3, 4, 7);
+    const auto mixedSpans = mixed.Syllabify(nullptr);
+    require(mixedSpans.Count() == 2 && mixedSpans.start() == 3 && mixedSpans.end() == 7 &&
+            mixedSpans.NextStop(3) == 4 && mixedSpans.NextStop(4) == 7,
+            "Mixed abbreviation lost the actual input boundaries at a nonzero offset");
     rime::DictEntry prefix;
     prefix.text = "我在";
     prefix.code.assign({1, 2});
@@ -272,7 +278,15 @@ int probe(int argc, char **argv) {
             for (size_t candidateIndex = 0; candidateIndex < count && candidateIndex < limit; ++candidateIndex) {
                 const auto candidate = menu->GetCandidateAt(candidateIndex);
                 const auto origin = rime::Candidate::GetGenuineCandidate(candidate);
-                if (selectExpected && candidate->text() == argv[6]) expectedIndex = candidateIndex;
+                if (selectExpected && candidate->text() == argv[6]) {
+                    expectedIndex = candidateIndex;
+                    if (const auto phrase = std::dynamic_pointer_cast<rime::Phrase>(origin)) {
+                        const auto spans = phrase->spans();
+                        require(spans.Count() == phrase->code().size() &&
+                                spans.start() == phrase->start() && spans.end() == phrase->end(),
+                                "Selected phrase syllables and original input span disagree");
+                    }
+                }
                 if (auto sentence = std::dynamic_pointer_cast<rime::Sentence>(origin)) {
                     require(sentence->spans().Count() == sentence->code().size(),
                             "Sentence lost its real syllable spans");
@@ -327,6 +341,10 @@ int main(int argc, char **argv) {
     std::filesystem::create_directories(scratch + "/build");
     writeSchema(scratch, "baseline", false);
     writeSchema(scratch, "neural", true);
+    // These artificial sentences test candidate identity in isolation. Earlier
+    // fixture commits must not alter the model's next comparison.
+    std::ofstream(scratch + "/neural.schema.yaml", std::ios::app) <<
+        "chinese_ime_lm:\n  use_commit_history: false\n";
     writeSchema(scratch, "disabled", true);
     std::ofstream(scratch + "/disabled.schema.yaml", std::ios::app) <<
         "chinese_ime_lm:\n  enable_reranking: false\n"
