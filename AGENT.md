@@ -84,6 +84,7 @@
 - 相邻字母颠倒搜索和诊断集见 `plugin/rime/neural/CORRECTION.md`；诊断集不能当成总体准确率，模型权重目前未重新训练。
 - `typing-corrector.h` 的两步键盘搜索必须保留正常拼写和至少一个未改字母。Rime 的原始图构建忽略纠错距离；`correction-distance.cpp` 在调用原实现后恢复每步代价。其链接符号与 CMake 中的 `--wrap`、固定 ABI/库校验绑定。移植时必须核对符号及 `neural-syllabifier-accessors.patch`，不得用允许重复符号或删除校验绕过链接问题。
 - 原生/邻键/两处误按/较远键位/交换，以及重排/两种整句扩展，都有 `.custom.yaml` 开关，见插件 README。新增功能也必须允许用户明确写 `false` 关闭，并验证关闭后的行为。未指定别名的滤镜 Ticket 默认配置区为 `filter`，本集成将它映射为 `chinese_ime_lm`；不能直接沿用默认区而使文档中的开关失效。
+- `mixed-abbreviations.h` 只为完整单音节补充方案原生“简拼前缀 + 完整音节”的真实双音节词，最多 8 个、保留原首选。复用现有词典而不创建额外 Memory；每个词必须携带独立的真实原始跨度，不能借用已剪掉简拼路径的原 syllabifier。开关 `enable_mixed_abbreviations: false` 应恢复原候选，且不依赖模型或拼写纠错总开关。
 - 前九项以后的候选必须继续可访问。缓冲候选不能重复、丢失或破坏去重；滤镜放在 `uniquifier` 前。
 - 上下文仅来自当前组合中已选中的分段。不增加剪贴板、其他 App 文本或网络读取。
 - 生产日志只记录加载状态、索引、数量、耗时，禁止记录用户输入和候选正文。

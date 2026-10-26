@@ -23,6 +23,7 @@
 - 对 Rime 已有的生成句候选进行重排，保留前缀、补全、选词上屏和后续候选。
 - 原版 Fcitx5 Android 主程序无需修改。
 - Rime 方案开启 `translator/enable_correction: true` 后，可向模型提供内置纠错产生的候选；它仍不能保证修正所有拼写错误。
+- 新增混合简拼词典候选：`shuo` 保留“说”首选，并补充“生活”等真实词条；同类 `shui → 社会`、`fan → 方案` 等 23 项诊断进入前 16 项。可用 `chinese_ime_lm/enable_mixed_abbreviations: false` 独立关闭；不依赖模型或拼写纠错总开关。
 
 ## 安装与启用
 

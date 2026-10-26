@@ -85,6 +85,37 @@ adb install <signed-apk>
 adb shell pm disable-user --user 0 org.fcitx.fcitx5.android.plugin.rime
 ```
 
+### 配置文件怎样写
+
+以下入门说明由 agy 的 Gemini 3.8 Flash 起草，再按实际配置接口核对。
+
+1. 确认当前使用的方案 ID。雾凇是 `rime_ice`，编辑前先备份对应文件：
+
+   ```text
+   /storage/emulated/0/Android/data/org.fcitx.fcitx5.android/files/data/rime/rime_ice.custom.yaml
+   ```
+
+   其他方案使用 `<方案ID>.custom.yaml`；修改用户目录中的文件，`build/` 内是会被重新生成的编译结果。
+
+2. **已有文件：**在原来的 `patch:` 下合并需要的设置，缩进用两个空格，不用 Tab。根 `patch:` 只写一次；已有同名配置键时直接修改其值，不要重复添加。
+
+3. **新建文件：**可从以下最小示例开始。滤镜已经加入过时，不要再次添加该滤镜行。
+
+   ```yaml
+   patch:
+     "engine/filters/@before last": chinese_ime_lm
+     translator/enable_correction: true
+     chinese_ime_lm/enable_mixed_abbreviations: true
+   ```
+
+   这里开启原生拼写纠错和混合简拼候选。需要关闭“shuo 补充生活”时，将最后一行改成 `false`；需要关闭字母交换时，在同一个 `patch:` 下设置 `chinese_ime_lm/enable_transposition: false`。更多开关见下表。
+
+4. 保存后重新部署 Rime，并重启 Fcitx 实例使配置生效。
+
+使用 `speller/algebra/+` 追加规则时，基础方案中的规则仍保留；只注释自定义文件内的 `abbrev` 行，并不会删除基础方案已有的简拼。插件功能直接使用下表对应的开关控制。
+
+### 完整开关示例
+
 在使用的方案 `.custom.yaml` 的现有 `patch:` 下加入滤镜。以原版雾凇方案为例，最后一个滤镜是 `uniquifier`：
 
 ```yaml
@@ -98,6 +129,7 @@ patch:
   chinese_ime_lm/enable_distant_neighbors: true  # 一处跨两步键位，例如 vi → xi
   chinese_ime_lm/enable_reranking: true  # 4M 模型比较已有完整候选
   chinese_ime_lm/enable_sentence_alternatives: true  # 同音前缀词条扩展
+  chinese_ime_lm/enable_mixed_abbreviations: true  # 保留完整音节首选，补充混合简拼词
   chinese_ime_lm/aggressive: true  # 更积极生成完整组合候选，默认开启
 ```
 
@@ -120,7 +152,10 @@ patch:
 | `enable_distant_neighbors` | `true` | 邻键搜索内允许一处距离为两步的误按，如 `vi → xi` |
 | `enable_reranking` | `true` | 模型重排原有完整候选 |
 | `enable_sentence_alternatives` | `true` | 用同音前缀词条补充完整句子，参与原有重排 |
+| `enable_mixed_abbreviations` | `true` | 如 `shuo` 补充 `s'huo → 生活`；只查真实双音节词，保留原首选 |
 | `aggressive` | `true` | 重新组合词典分词，补充完整候选供选择 |
+
+`enable_mixed_abbreviations` 独立于 `translator/enable_correction`、`aggressive` 和模型重排。它补回“简拼前缀 + 完整音节”的真实词典词，例如 `shuo → 生活`、`shui → 社会`、`fan → 方案`；“说/水/饭”等原首选保留。设为 `false` 后停止补充；显式输入 `s'huo` 仍由原方案解析。测试和限制见 [混合简拼诊断](CORRECTION.md#合法全拼遮住混合简拼shuo-与-shuo)。
 
 `enable_multiple_typos` 和 `enable_distant_neighbors` 只控制 `enable_keyboard_neighbors` 的扩展搜索。原生同排纠错是另一条搜索路径；要单独试用新增类型，可同时设置 `enable_native_correction: false`。`enable_keyboard_neighbors` 和 `enable_transposition` 都关、原生纠错仍开时，沿用原版 Rime 搜索行为。
 
@@ -138,6 +173,7 @@ patch:
   translator/enable_correction: false
   chinese_ime_lm/enable_reranking: false
   chinese_ime_lm/enable_sentence_alternatives: false
+  chinese_ime_lm/enable_mixed_abbreviations: false
   chinese_ime_lm/aggressive: false
 ```
 
