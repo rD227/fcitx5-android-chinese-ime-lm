@@ -59,6 +59,11 @@ class Syllabifier {
                                   SyllableGraph* graph);
   RIME_DLL void EnableCorrection(Corrector* corrector);
 
+  // Local integration: read-only access for distance-weighted graph edges.
+  // Inline nonvirtual accessors do not change the pinned class layout.
+  Corrector* corrector() const { return corrector_; }
+  const string& delimiters() const { return delimiters_; }
+
  protected:
   void CheckOverlappedSpellings(SyllableGraph* graph, size_t start, size_t end);
   void Transpose(SyllableGraph* graph);

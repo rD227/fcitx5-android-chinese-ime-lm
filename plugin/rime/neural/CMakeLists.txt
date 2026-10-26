@@ -28,9 +28,12 @@ set_target_properties(chinese_ime_lm PROPERTIES IMPORTED_LOCATION "${NEURAL_RUST
 # Internal headers used by this filter need this generated configuration too.
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/neural-include/rime/build_config.h"
     "#pragma once\n#define RIME_ENABLE_LOGGING\n")
-target_sources(rime PRIVATE "${NEURAL_DIR}/neural-reranker.cpp")
+set(NEURAL_CORRECTION_SOURCES "${NEURAL_DIR}/correction-distance.cpp")
+set(NEURAL_SYLLABIFIER_SYMBOL "_ZN4rime11Syllabifier18BuildSyllableGraphERKNSt6__ndk112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEERNS_5PrismEPNS_13SyllableGraphE")
+target_sources(rime PRIVATE "${NEURAL_DIR}/neural-reranker.cpp" ${NEURAL_CORRECTION_SOURCES})
+target_link_options(rime PRIVATE "LINKER:--wrap=${NEURAL_SYLLABIFIER_SYMBOL}")
 # librime 1.16.1 headers use C++17 filesystem::path::u8string semantics.
-set_source_files_properties("${NEURAL_DIR}/neural-reranker.cpp"
+set_source_files_properties("${NEURAL_DIR}/neural-reranker.cpp" ${NEURAL_CORRECTION_SOURCES}
     TARGET_DIRECTORY rime PROPERTIES COMPILE_OPTIONS "-std=c++17")
 target_compile_definitions(rime PRIVATE GLOG_USE_GLOG_EXPORT)
 target_include_directories(rime PRIVATE
@@ -45,8 +48,9 @@ target_link_libraries(rime chinese_ime_lm dl log m)
 # Explicit test target; never installed in or packaged with the plugin.
 add_executable(rime-neural-smoke EXCLUDE_FROM_ALL
     "${NEURAL_DIR}/tests/rime-filter-smoke.cpp"
-    "${NEURAL_DIR}/neural-reranker.cpp")
+    "${NEURAL_DIR}/neural-reranker.cpp" ${NEURAL_CORRECTION_SOURCES})
 set_target_properties(rime-neural-smoke PROPERTIES CXX_STANDARD 17)
+target_link_options(rime-neural-smoke PRIVATE "LINKER:--wrap=${NEURAL_SYLLABIFIER_SYMBOL}")
 target_include_directories(rime-neural-smoke PRIVATE
     "${NEURAL_DIR}" "${NEURAL_DIR}/vendor/librime/src"
     "${CMAKE_CURRENT_BINARY_DIR}/neural-include"
@@ -83,6 +87,10 @@ install(FILES "${NEURAL_DIR}/LICENSE"
 install(FILES "${NEURAL_DIR}/vendor/librime/LICENSE"
     DESTINATION "${FCITX_INSTALL_DATADIR}/rime-data/rime-chinese-ime-lm"
     RENAME "RIME-BSD-3-Clause.txt"
+    COMPONENT prebuilt-assets)
+install(FILES "${NEURAL_DIR}/vendor/librime/DARTS_COPYING.md"
+    DESTINATION "${FCITX_INSTALL_DATADIR}/rime-data/rime-chinese-ime-lm"
+    RENAME "DARTS-BSD-2-Clause.txt"
     COMPONENT prebuilt-assets)
 install(FILES "${NEURAL_DIR}/vendor/chinese-ime-lm/LICENSE"
     "${NEURAL_DIR}/vendor/chinese-ime-lm/NOTICE"

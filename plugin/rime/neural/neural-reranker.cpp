@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "neural-reranker.h"
 #include "candidate-policy.h"
+#include "typing-corrector.h"
 
 #include <algorithm>
 #include <chrono>
@@ -32,6 +33,21 @@ constexpr const char *kLogTag = "ChineseImeLm";
 constexpr size_t kCandidateCount = 9;
 std::string userDataDirectory;
 std::string sharedDataDirectory;
+
+class NeuralCorrectorComponent final : public rime::Corrector::Component {
+public:
+    rime::Corrector *Create(const rime::Ticket &ticket) override {
+        bool transpositions = false, neighbors = false;
+        if (ticket.schema) {
+            ticket.schema->config()->GetBool("chinese_ime_lm/enable_transposition", &transpositions);
+            neighbors = transpositions;  // Existing enhanced configurations opt in.
+            ticket.schema->config()->GetBool("chinese_ime_lm/enable_keyboard_neighbors", &neighbors);
+        }
+        return transpositions || neighbors
+            ? static_cast<rime::Corrector *>(new chinese_ime_lm::TypingCorrector(transpositions, neighbors))
+            : new rime::NearSearchCorrector;
+    }
+};
 
 class BufferedTranslation final : public rime::Translation {
 public:
@@ -142,5 +158,6 @@ void registerChineseImeLm(const char *directory, const char *sharedDirectory) {
     sharedDataDirectory = sharedDirectory;
     rime::Registry::instance().Register(
         "chinese_ime_lm", new rime::Component<ChineseImeLmFilter>());
+    rime::Registry::instance().Register("corrector", new NeuralCorrectorComponent);
     __android_log_print(ANDROID_LOG_INFO, kLogTag, "Rime filter registered");
 }
