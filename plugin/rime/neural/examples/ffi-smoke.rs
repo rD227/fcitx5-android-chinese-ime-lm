@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 use std::ffi::CString;
-use rime_chinese_ime_lm::{cime_best, cime_free, cime_load};
+use rime_chinese_ime_lm::{cime_best, cime_free, cime_load, cime_scores};
 
 fn main() {
     let path = CString::new(std::env::args().nth(1).expect("model path")).unwrap();
@@ -14,6 +14,13 @@ fn main() {
         ] {
             let texts = [CString::new(wrong).unwrap(), CString::new(correct).unwrap()];
             let pointers = [texts[0].as_ptr(), texts[1].as_ptr()];
+            let mut scores = [f32::NAN; 2];
+            assert_eq!(cime_scores(handle, context.as_ptr(), pointers.as_ptr(), 2,
+                                   scores.as_mut_ptr()), 0);
+            assert!(scores.iter().all(|score| score.is_finite()));
+            assert!(scores[1] > scores[0], "beam scores must prefer the same correction");
+            assert_eq!(cime_scores(std::ptr::null_mut(), context.as_ptr(), pointers.as_ptr(),
+                                   2, scores.as_mut_ptr()), -1);
             let selected = cime_best(handle, context.as_ptr(), pointers.as_ptr(), [1, 1].as_ptr(), 2);
             println!("{wrong} / {correct}: selected={selected}");
             assert_eq!(selected, 1, "a scored candidate must retain its original index");

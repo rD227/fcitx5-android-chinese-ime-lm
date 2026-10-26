@@ -29,6 +29,31 @@ pub unsafe extern "C" fn cime_free(handle: *mut Reranker) {
     }
 }
 
+/// Score real decoder paths for beam search. The caller owns `scores[count]`;
+/// values are mean log probabilities, so different word splits remain comparable.
+#[no_mangle]
+pub unsafe extern "C" fn cime_scores(
+    handle: *mut Reranker,
+    context: *const c_char,
+    texts: *const *const c_char,
+    count: usize,
+    scores: *mut f32,
+) -> i32 {
+    if handle.is_null() || context.is_null() || texts.is_null() || scores.is_null() {
+        return -1;
+    }
+    let Ok(context) = CStr::from_ptr(context).to_str() else { return -1 };
+    let mut candidates = Vec::with_capacity(count);
+    for &pointer in std::slice::from_raw_parts(texts, count) {
+        if pointer.is_null() { return -1; }
+        let Ok(text) = CStr::from_ptr(pointer).to_str() else { return -1 };
+        candidates.push(text);
+    }
+    let values = (*handle).log_probabilities(context, &candidates);
+    std::ptr::copy_nonoverlapping(values.as_ptr(), scores, count);
+    0
+}
+
 /// Return the original index to promote, zero to keep order, or -1 for invalid
 /// FFI input. Bit 0 means full-key coverage; bit 1 means a trusted dictionary hit.
 #[no_mangle]

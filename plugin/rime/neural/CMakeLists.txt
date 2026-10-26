@@ -42,6 +42,7 @@ target_include_directories(rime PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/neural-include"
     "${PREBUILT_DIR}/boost/${ANDROID_ABI}/include"
     "${PREBUILT_DIR}/glog/${ANDROID_ABI}/include"
+    "${PREBUILT_DIR}/marisa/${ANDROID_ABI}/include"
 )
 target_link_libraries(rime chinese_ime_lm dl log m)
 
@@ -55,7 +56,8 @@ target_include_directories(rime-neural-smoke PRIVATE
     "${NEURAL_DIR}" "${NEURAL_DIR}/vendor/librime/src"
     "${CMAKE_CURRENT_BINARY_DIR}/neural-include"
     "${PREBUILT_DIR}/boost/${ANDROID_ABI}/include"
-    "${PREBUILT_DIR}/glog/${ANDROID_ABI}/include")
+    "${PREBUILT_DIR}/glog/${ANDROID_ABI}/include"
+    "${PREBUILT_DIR}/marisa/${ANDROID_ABI}/include")
 target_compile_definitions(rime-neural-smoke PRIVATE GLOG_USE_GLOG_EXPORT)
 target_link_libraries(rime-neural-smoke PRIVATE ${RIME_TARGET} chinese_ime_lm dl log m)
 
