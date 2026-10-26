@@ -43,6 +43,11 @@ android {
         }
     }
 
+    if (rimeNeural) {
+        sourceSets.getByName("release").res.srcDir("neural/res")
+        sourceSets.getByName("debug").res.srcDir("neural/res")
+    }
+
     packaging {
         jniLibs {
             excludes += setOf(

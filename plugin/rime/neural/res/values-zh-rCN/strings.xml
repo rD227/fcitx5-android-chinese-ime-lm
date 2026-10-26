@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="description">Rime 离线中文候选重排与可选拼音纠错。各功能可在方案的 custom.yaml 中独立开关，修改后重新部署 Rime。\n源码与设置说明：https://github.com/rD227/fcitx5-android-chinese-ime-lm</string>
+</resources>

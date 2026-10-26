@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="description">Rime with offline Chinese IME LM reranking and optional pinyin typo correction. Configure each feature in your schema custom.yaml, then redeploy Rime.\nSource and settings: https://github.com/rD227/fcitx5-android-chinese-ime-lm</string>
+</resources>
