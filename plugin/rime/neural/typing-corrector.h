@@ -42,12 +42,15 @@ public:
                 return true;
             });
         }
-        if (transpositions_) chinese_ime_lm::transposedPinyinPrefixes(key,
-            [&](const std::string &corrected, size_t length) {
-                int spelling;
-                if (prism.GetValue(corrected, &spelling)) {
-                    results->Alter(spelling, {1, spelling, length});
-                }
+        if (transpositions_) chinese_ime_lm::transposedPinyinKeys(key,
+            [&](const std::string &corrected, size_t minimumLength) {
+                // One trie traversal validates every prefix for this exchange.
+                std::array<rime::Prism::Match, 6> matches;
+                const size_t count = prism.trie().commonPrefixSearch(
+                    corrected.data(), matches.data(), matches.size(), corrected.size());
+                for (size_t i = 0; i < count; ++i)
+                    if (matches[i].length >= minimumLength)
+                        results->Alter(matches[i].value, {1, matches[i].value, matches[i].length});
             });
     }
 private:

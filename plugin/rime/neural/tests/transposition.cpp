@@ -49,9 +49,10 @@ int main() {
     assert(keyboardVariants("mr o", 2).count("mei") == 0);
     auto variants = [](const std::string &input) {
         std::set<std::pair<std::string, size_t>> result;
-        chinese_ime_lm::transposedPinyinPrefixes(input,
-            [&](const std::string &key, size_t consumed) {
-                result.emplace(key, consumed);
+        chinese_ime_lm::transposedPinyinKeys(input,
+            [&](const std::string &key, size_t minimumLength) {
+                for (size_t consumed = minimumLength; consumed <= key.size(); ++consumed)
+                    result.emplace(key.substr(0, consumed), consumed);
             });
         return result;
     };
@@ -59,6 +60,10 @@ int main() {
     assert(variants("zhognwen").count({"zhong", 5}));
     assert(variants("wne").count({"wen", 3}));
     assert(variants("shuagn").count({"shuang", 6}));
+    assert(variants("suhang").count({"shuang", 6}));
+    size_t searches = 0;
+    chinese_ime_lm::transposedPinyinKeys("shuang", [&](const auto &, size_t) { ++searches; });
+    assert(searches == 5);  // Previously 15 prefix searches, now one per position.
     // An explicit pinyin separator must never be crossed by an exchange.
     const auto separated = variants("shuan'g");
     assert(separated.count({"shuna", 5}));
