@@ -3,10 +3,10 @@
 为 Fcitx5 Android 的 Rime 增加离线中文候选重排。沿用现有拼音方案和词库，使用 chinese-ime-lm 的 4M 模型比较最多九个整句候选。对于自动组句，可复用同一拼音路径上的词条补充同音整句候选；不处理 Sayboard 的语音识别。
 
 - 只比较覆盖同一段完整输入的候选，允许候选中文字数不同。
-- 保留词典整词首选，不改变补全、前缀或非 `abc` 分段。
+- 无前文时保留词典整词首选；有前文时可比较同音词或同一合法简拼的不同展开。不改变补全、前缀或非 `abc` 分段。
 - 可选的通用相邻字母颠倒纠错见 [纠错方法和实测限制](CORRECTION.md)。当前权重未重新训练。
 - `0.1.4` 增加跨排邻键、每音节两步键盘纠错，以及沿真实拼音路径组合完整候选的束搜索；现有首选排序保留，新组合放在其后供选择。
-- 使用当前组合中已选中的前文作为上下文，不读取剪贴板或其他应用的文字。
+- 自动组句使用当前组合中已选的前文；分次词语重排还可使用 Rime 会话已提交文字。不读取剪贴板或其他应用的文字。
 - 日志标签 `ChineseImeLm` 记录模型加载、重排索引和推理耗时，不记录输入文本。
 - 暂支持 `arm64-v8a`，原版主程序无需修改。插件基于 `048f581c`，应搭配同版本主程序；升级原生库时需重新核对 Rime 头文件和 Fcitx ABI。
 
@@ -80,6 +80,8 @@ APK 位于 `plugin/rime/build/outputs/apk/release/`，需使用自己的密钥�
 
 先备份 Rime 用户目录。安装新插件后，禁用原版 Rime 插件，避免两者提供同名原生插件和资源；保留原版安装及数据。
 
+普通包和增强包都启用时，App 可能实际加载普通包。数据目录或 APK 中有模型文件不代表模型已经运行。增强包名必须为 `org.fcitx.fcitx5.android.plugin.rime.neural`；重启后可用 `adb logcat -s ChineseImeLm` 确认 `model loaded`，词语实际参与上下文评分时还会输出 `contextual_scored` 数量和提升索引（不记录正文）。
+
 ```sh
 adb install <signed-apk>
 adb shell pm disable-user --user 0 org.fcitx.fcitx5.android.plugin.rime
@@ -129,6 +131,7 @@ patch:
   chinese_ime_lm/enable_distant_neighbors: true  # 一处跨两步键位，例如 vi → xi
   chinese_ime_lm/enable_reranking: true  # 4M 模型比较已有完整候选
   chinese_ime_lm/enable_contextual_reranking: true  # 有前文时比较同音完整词典词
+  chinese_ime_lm/enable_contextual_abbreviations: true  # 同一合法简拼的不同读音展开
   chinese_ime_lm/enable_sentence_alternatives: true  # 同音前缀词条扩展
   chinese_ime_lm/enable_mixed_abbreviations: true  # 保留完整音节首选，补充混合简拼词
   chinese_ime_lm/aggressive: true  # 更积极生成完整组合候选，默认开启
@@ -153,6 +156,7 @@ patch:
 | `enable_distant_neighbors` | `true` | 邻键搜索内允许一处距离为两步的误按，如 `vi → xi` |
 | `enable_reranking` | `true` | 模型重排原有完整候选 |
 | `enable_contextual_reranking` | `true` | 有前文时比较同音完整词典词，并要求前文增强替代词优势 |
+| `enable_contextual_abbreviations` | `true` | 上下文重排内允许同一合法简拼的不同读音展开 |
 | `enable_sentence_alternatives` | `true` | 用同音前缀词条补充完整句子，参与原有重排 |
 | `enable_mixed_abbreviations` | `true` | 如 `shuo` 补充 `s'huo → 生活`；只查真实双音节词，保留原首选 |
 | `aggressive` | `true` | 重新组合词典分词，补充完整候选供选择 |
@@ -204,7 +208,9 @@ adb shell pm enable org.fcitx.fcitx5.android.plugin.rime
 
 ## 分次输入的上下文重排
 
-先上屏“还在”，再输入 `paidui` 时，增强版可以使用当前 Rime 会话的已提交文字比较“派对 / 排队”。`enable_contextual_reranking` 默认 `true`，要求模型重排开启。只比较相同读音、原始输入范围和音节边界的完整词典候选，保留真实选词与学习身份；不把其他拼音的词混入比较。
+先上屏“还在”，再输入 `paidui` 时，增强版可以使用当前 Rime 会话的已提交文字比较“派对 / 排队”。`enable_contextual_reranking` 默认 `true`，要求模型重排开启。只比较相同原始输入范围和音节边界的完整词典候选，保留真实选词与学习身份。同音词直接比较；不同读音必须在原方案的真实拼音图中都是同一段简拼的合法展开，且没有纠错标记。
+
+例如先上屏“重庆和成都”，再输入 `zhi'j`，“直接 / 之间”都符合这段简拼，可结合前文比较；完整输入 `zhijie` 时仍保留“直接”的正常拼音含义。`chinese_ime_lm/enable_contextual_abbreviations: false` 可独立关闭这种简拼比较，保留同音词重排。它不开放任意不同读音、模糊音、纠错或预测补全的跨路径比较。
 
 模型还会计算不含前文的分数。只有前文增强了替代词相对于原首选的优势，且替代词在当前前文下分数更高，才提升它；避免仅因某个词本身常见就覆盖原来的用户词频。4M 模型仍有判断错误，这个条件不是准确率保证。
 
