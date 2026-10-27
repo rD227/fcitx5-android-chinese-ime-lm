@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "neural-reranker.h"
 #include "candidate-policy.h"
+#include "contextual-ranking.h"
+#include "contextual-score-policy.h"
 #include "sentence-alternatives.h"
 #include "typing-corrector.h"
 #include "sentence-decoder.h"
@@ -29,6 +31,8 @@ void *cime_load(const char *path);
 void cime_free(void *handle);
 int cime_best(void *handle, const char *context, const char *const *texts,
               const uint8_t *facts, size_t count);
+int cime_scores(void *handle, const char *context, const char *const *texts,
+                size_t count, float *scores);
 }
 
 namespace {
@@ -94,6 +98,7 @@ public:
         if (name_space_ == "filter") name_space_ = "chinese_ime_lm";
         engine_->schema()->config()->GetBool(name_space_ + "/aggressive", &aggressive_);
         engine_->schema()->config()->GetBool(name_space_ + "/enable_reranking", &reranking_);
+        engine_->schema()->config()->GetBool(name_space_ + "/enable_contextual_reranking", &contextualReranking_);
         engine_->schema()->config()->GetBool(name_space_ + "/enable_sentence_alternatives", &alternatives_);
         engine_->schema()->config()->GetBool(name_space_ + "/enable_mixed_abbreviations", &mixedAbbreviations_);
         auto clear = [this](rime::Context *) { decoderCache_.Clear(); };
@@ -144,6 +149,56 @@ public:
         const auto *ctx = engine_->context();
         const auto first = source->Peek();
         const auto genuine = rime::Candidate::GetGenuineCandidate(first);
+        if (genuine && contextualReranking_ && reranking_ &&
+            (genuine->type() == "phrase" || genuine->type() == "user_phrase") &&
+            first->end() == ctx->input().size()) {
+            bool useHistory = true;
+            engine_->schema()->config()->GetBool(name_space_ + "/use_commit_history", &useHistory);
+            std::string context;
+            if (useHistory) {
+                for (const auto &record : ctx->commit_history()) {
+                    if (record.type == "thru" || record.type == "raw") context.clear();
+                    else context += record.text;
+                }
+            }
+            context += ctx->composition().GetTextBefore(first->start());
+            if (!context.empty()) {
+                rime::CandidateList candidates;
+                while (!source->exhausted() && candidates.size() < kCandidateCount) {
+                    candidates.push_back(source->Peek());
+                    source->Next();
+                }
+                const auto facts = chinese_ime_lm::contextualPhraseFacts(
+                    candidates, first->start(), ctx->input().size(), true);
+                if (!facts.empty()) {
+                    std::vector<const char *> texts;
+                    std::vector<size_t> indices;
+                    for (size_t index = 0; index < candidates.size(); ++index) {
+                        if (!(facts[index] & 1)) continue;
+                        texts.push_back(candidates[index]->text().c_str());
+                        indices.push_back(index);
+                    }
+                    std::vector<float> conditioned(texts.size()), unconditioned(texts.size());
+                    const int priorStatus = cime_scores(model_.get(), "", texts.data(),
+                                                       texts.size(), unconditioned.data());
+                    const int contextStatus = cime_scores(model_.get(), context.c_str(), texts.data(),
+                                                         texts.size(), conditioned.data());
+                    size_t selected = 0;
+                    if (priorStatus == 0 && contextStatus == 0) {
+                        const std::vector<uint8_t> scoringFacts(texts.size(), 1);
+                        const size_t best = chinese_ime_lm::contextualBest(
+                            conditioned, unconditioned, scoringFacts);
+                        selected = indices[best];
+                    }
+                    if (priorStatus != 0 || contextStatus != 0)
+                        __android_log_print(ANDROID_LOG_ERROR, kLogTag, "invalid contextual inference result");
+                    if (selected > 0)
+                        std::rotate(candidates.begin(), candidates.begin() + selected,
+                                    candidates.begin() + selected + 1);
+                }
+                return rime::New<BufferedTranslation>(std::move(candidates), std::move(source));
+            }
+        }
         if (!genuine || genuine->type() != "sentence" ||
             first->end() != ctx->input().size()) {
             return source;
@@ -201,6 +256,7 @@ public:
 private:
     bool aggressive_ = true;
     bool reranking_ = true;
+    bool contextualReranking_ = true;
     bool alternatives_ = true;
     bool mixedAbbreviations_ = true;
     chinese_ime_lm::DecoderCache decoderCache_;

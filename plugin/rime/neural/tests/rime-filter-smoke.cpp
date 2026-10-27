@@ -226,8 +226,12 @@ int checkSpellings(const std::string &cases) {
 
 int probe(int argc, char **argv) {
     require(argc >= 6, "--probe <copied-user-directory> <shared-directory> <schema> <input>...");
-    const bool selectExpected = std::string(argv[1]) == "--check-composition";
-    if (selectExpected) require(argc == 7, "--check-composition <copy> <shared> <schema> <input> <expected>");
+    const std::string mode = argv[1];
+    const bool checkFollowing = mode == "--check-following" ||
+        mode == "--check-following-reset" || mode == "--check-following-space";
+    const bool selectExpected = std::string(argv[1]) == "--check-composition" || checkFollowing;
+    if (selectExpected) require(argc == (checkFollowing ? 9 : 7),
+        "--check-composition <copy> <shared> <schema> <input> <expected> OR --check-following <copy> <shared> <schema> <prefix-input> <prefix-text> <input> <expected-leader>");
     auto *api = rime_get_api();
     RIME_STRUCT(RimeTraits, traits);
     traits.user_data_dir = argv[2];
@@ -250,7 +254,8 @@ int probe(int argc, char **argv) {
         api->finalize();
         return result;
     }
-    for (int index = 5; index < argc - (selectExpected ? 1 : 0); ++index) {
+    for (int index = 5; index < argc - (selectExpected ? 1 : 0); index += checkFollowing ? 2 : 1) {
+        const char *expected = selectExpected ? argv[checkFollowing ? index + 1 : 6] : nullptr;
         api->clear_composition(session);
         const auto begin = std::chrono::steady_clock::now();
         long long maxKeyMicros = 0;
@@ -278,7 +283,7 @@ int probe(int argc, char **argv) {
             for (size_t candidateIndex = 0; candidateIndex < count && candidateIndex < limit; ++candidateIndex) {
                 const auto candidate = menu->GetCandidateAt(candidateIndex);
                 const auto origin = rime::Candidate::GetGenuineCandidate(candidate);
-                if (selectExpected && candidate->text() == argv[6]) {
+                if (selectExpected && candidate->text() == expected) {
                     expectedIndex = candidateIndex;
                     if (const auto phrase = std::dynamic_pointer_cast<rime::Phrase>(origin)) {
                         const auto spans = phrase->spans();
@@ -315,12 +320,18 @@ int probe(int argc, char **argv) {
             }
             if (selectExpected) {
                 require(expectedIndex < count, "Expected complete sentence not generated");
+                if (checkFollowing && index == 7)
+                    require(expectedIndex == 0, "Following word leader mismatch");
                 require(api->select_candidate(session, expectedIndex), "Cannot select decoded sentence");
                 RIME_STRUCT(RimeCommit, commit);
                 require(api->get_commit(session, &commit), "Decoded sentence did not commit");
-                require(std::string(commit.text) == argv[6], "Decoded selection changed text identity");
+                require(std::string(commit.text) == expected, "Decoded selection changed text identity");
                 api->free_commit(&commit);
                 std::cout << "PASS: decoded sentence selected and committed" << std::endl;
+                if (checkFollowing && index == 5) {
+                    if (mode == "--check-following-reset") api->process_key(session, 0xff0d, 0);
+                    if (mode == "--check-following-space") api->process_key(session, ' ', 0);
+                }
             }
         }
     }
@@ -332,6 +343,9 @@ int probe(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     if (argc > 1 && (std::string(argv[1]) == "--probe" ||
+                    std::string(argv[1]) == "--check-following" ||
+                    std::string(argv[1]) == "--check-following-reset" ||
+                    std::string(argv[1]) == "--check-following-space" ||
                     std::string(argv[1]) == "--probe-wide" ||
                     std::string(argv[1]) == "--check-spellings" ||
                     std::string(argv[1]) == "--check-composition")) return probe(argc, argv);
