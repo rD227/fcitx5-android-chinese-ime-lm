@@ -1,5 +1,7 @@
 # fcitx5-android
 
+[如何配置](https://github.com/rD227/fcitx5-android-chinese-ime-lm/blob/8e198164781e7d98d3680afadb5dd8a06400d3a1/plugin/rime/neural/README.md?plain=1#L89)
+
 **许可证：新增神经重排集成代码采用 [MIT](LICENSE-MIT)；Fcitx5 Android 原代码及其修改保留 LGPL，第三方推理实现和权重保留 Apache-2.0，Rime 头文件保留 BSD-3-Clause。完整仓库和 APK 包含多种授权，范围见 [NOTICE](NOTICE)。**
 
 *此分支增加 Rime 离线中文候选重排插件，构建、启用和授权说明见 [Chinese IME LM](plugin/rime/neural/README.md)。下文保留上游项目介绍和下载链接；上游 APK 不包含本分支的新滤镜*
