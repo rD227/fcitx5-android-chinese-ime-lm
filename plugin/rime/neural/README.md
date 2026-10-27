@@ -95,6 +95,8 @@ Android 只对**相同包名且签名匹配**的 APK 做覆盖升级。普通包
 
 下面使用 **Windows PowerShell**。先查看设备，再把占位符改成目标手机的序列号；各代码块共用这些变量：
 
+~~在这里ai把序列号都写上去了真的是完全没有必要~~
+
 ```powershell
 adb devices -l
 $deviceSerial = "<设备序列号>"
