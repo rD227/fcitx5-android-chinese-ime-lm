@@ -52,6 +52,7 @@
 ```yaml
 patch:
   "engine/filters/@before last": chinese_ime_lm
+  chinese_ime_lm/enable_logging: false  # 默认关闭诊断日志；排查问题时临时改为 true
   translator/enable_correction: true  # 可选：让 Rime 生成邻键误击的纠错候选
   chinese_ime_lm/enable_native_correction: true  # Rime 自带的同排邻键搜索
   chinese_ime_lm/enable_transposition: true  # 本增强版插件：全拼相邻字母颠倒
@@ -66,7 +67,7 @@ patch:
   chinese_ime_lm/aggressive: true  # 更积极生成完整组合候选，默认开启
 ```
 
-将这一项合并到已有 `patch:`，不要覆盖原有设置。自定义滤镜顺序时，把 `chinese_ime_lm` 放在 `uniquifier` 前、文字转换滤镜后。随后重新部署 Rime 并重启 Fcitx 实例。可用 `adb logcat -s ChineseImeLm` 检查模型加载和推理。
+将这一项合并到已有 `patch:`，不要覆盖原有设置。自定义滤镜顺序时，把 `chinese_ime_lm` 放在 `uniquifier` 前、文字转换滤镜后。随后重新部署 Rime 并重启 Fcitx 实例。排查时先临时开启诊断日志，再用 `adb logcat -s ChineseImeLm` 检查模型加载和推理。
 
 内置纠错负责产生替代拼写，小模型比较汉字候选；模型本身不直接改写拼音。新增设置需要本增强插件，原版插件不实现它们。当前不支持通用插入、删除或任意多字母换位。现有手写规则可共存，不要整体覆盖或注释配置。
 
@@ -78,6 +79,7 @@ patch:
 
 | 设置 | 未指定时 | 作用 |
 | --- | --- | --- |
+| `enable_logging` | `false` | 模型成功加载、逐键评分和耗时诊断；失败错误仍输出 |
 | `enable_native_correction` | `true` | 保留 Rime 自带的同排邻键搜索 |
 | `enable_transposition` | `false` | 一次相邻字母交换，如 `suhang → shuang` |
 | `enable_keyboard_neighbors` | 跟随 `enable_transposition` | 按 QWERTY 位置搜索同排和跨排邻键 |
@@ -121,6 +123,17 @@ patch:
 `aggressive` 控制完整组合候选生成，不改变原有首选决定。它复用系统词典和用户词典，保留 4 条中间路径、最多 32 条完整组合，并缓存同一组合中的前缀；提交、取消和删词会清空缓存。老设备上会增加按键耗时，可设为 `false` 关闭。`wozaidadianzi` 已能生成“我再打点字”，但目前仍排得较后，不能保证首选正确。
 
 增强插件的“插件描述”中提供本仓库地址与配置入口，支持中文和英文，点按描述可复制。此次资源已通过 Android 资源编译；完整 APK 中的显示待打包安装复核。
+
+### 诊断日志开关
+
+默认不输出本增强插件的 INFO/DEBUG 诊断，也不读取逐键诊断计时器。需要排查时，在现有同一个 `patch:` 下合并：
+
+```yaml
+patch:
+  chinese_ime_lm/enable_logging: true
+```
+
+改为 `false` 或移除该项即恢复默认关闭。保存后重新部署 Rime，并重启 Fcitx 实例；旧 APK 需要先升级到实现该开关的版本。模型加载失败、无效推理等 ERROR 仍保留；上游 Rime/Fcitx 及系统日志不受此开关控制。滤镜显式别名如 `chinese_ime_lm@my_lm` 使用 `my_lm/enable_logging`。日志开关不影响模型是否加载和参与排序，不记录输入或候选正文。
 
 分次输入的上下文重排及简拼比较，见 [详细配置与限制](plugin/rime/neural/README.md#分次输入的上下文重排)。
 

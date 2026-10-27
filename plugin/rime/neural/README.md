@@ -7,7 +7,7 @@
 - 可选的通用相邻字母颠倒纠错见 [纠错方法和实测限制](CORRECTION.md)。当前权重未重新训练。
 - `0.1.4` 增加跨排邻键、每音节两步键盘纠错，以及沿真实拼音路径组合完整候选的束搜索；现有首选排序保留，新组合放在其后供选择。
 - 自动组句使用当前组合中已选的前文；分次词语重排还可使用 Rime 会话已提交文字。不读取剪贴板或其他应用的文字。
-- 日志标签 `ChineseImeLm` 记录模型加载、重排索引和推理耗时，不记录输入文本。
+- 诊断日志默认关闭；`enable_logging: true` 才输出模型成功加载、重排索引和耗时。加载失败及推理错误仍输出，不记录输入文本。
 - 暂支持 `arm64-v8a`，原版主程序无需修改。插件基于 `048f581c`，应搭配同版本主程序；升级原生库时需重新核对 Rime 头文件和 Fcitx ABI。
 
 ## 构建
@@ -80,7 +80,7 @@ APK 位于 `plugin/rime/build/outputs/apk/release/`，需使用自己的密钥�
 
 先备份 Rime 用户目录。安装新插件后，禁用原版 Rime 插件，避免两者提供同名原生插件和资源；保留原版安装及数据。
 
-普通包和增强包都启用时，App 可能实际加载普通包。数据目录或 APK 中有模型文件不代表模型已经运行。增强包名必须为 `org.fcitx.fcitx5.android.plugin.rime.neural`；重启后可用 `adb logcat -s ChineseImeLm` 确认 `model loaded`，词语实际参与上下文评分时还会输出 `contextual_scored` 数量和提升索引（不记录正文）。
+普通包和增强包都启用时，App 可能实际加载普通包。数据目录或 APK 中有模型文件不代表模型已经运行。增强包名必须为 `org.fcitx.fcitx5.android.plugin.rime.neural`；临时[开启诊断日志](#诊断日志开关)并重启后，可用 `adb logcat -s ChineseImeLm` 确认 `model loaded`，词语实际参与上下文评分时还会输出 `contextual_scored` 数量和提升索引（不记录正文）。
 
 ```sh
 adb install <signed-apk>
@@ -132,14 +132,14 @@ adb -s $deviceSerial shell am start -n "$appPackage/.ui.main.MainActivity"
 
 普通包保留安装和数据，只是停用；这些命令不改个人 YAML。`INSTALL_FAILED_UPDATE_INCOMPATIBLE` 表示签名不匹配，应使用原签名重新签包。`-r` 不会让不同包名互相覆盖，也不能绕过签名校验。
 
-重启后，在测试输入框切到 Rime 并输入中文，再查**新进程**的模型日志：
+需要日志验收时，先在 custom YAML 中临时设置 `chinese_ime_lm/enable_logging: true`（见[诊断日志开关](#诊断日志开关)），重新部署并重启 Fcitx。在测试输入框切到 Rime 并输入中文，再查**新进程**的模型日志：
 
 ```powershell
 $imeProcessId = (adb -s $deviceSerial shell pidof -s $appPackage).Trim()
 adb -s $deviceSerial logcat -d "--pid=$imeProcessId" -s ChineseImeLm
 ```
 
-首次加载模型时可看到 `model loaded`；有前文且候选满足比较条件时，新版会输出 `contextual_scored=... promoted=...`，表示实际完成了模型评分。`promoted=0` 表示保留首选，不等于模型未运行；普通词典词也不保证每次都进入评分。模型文件存在、APK 版本号变大、独立探针通过，都不能替代对运行库和当前进程日志的核对。只看安装包/版本、切换包及查日志不需要 Root。
+开启诊断后，首次加载模型时可看到 `model loaded`；有前文且候选满足比较条件时，新版会输出 `contextual_scored=... promoted=...`，表示实际完成了模型评分。`promoted=0` 表示保留首选，不等于模型未运行；普通词典词也不保证每次都进入评分。默认关闭诊断时，没有这些日志是正常行为。模型文件存在、APK 版本号变大、独立探针通过，都不能替代对运行库和当前进程日志的核对。只看安装包/版本、切换包及查日志不需要 Root。
 
 ### 配置文件怎样写
 
@@ -175,6 +175,7 @@ adb -s $deviceSerial logcat -d "--pid=$imeProcessId" -s ChineseImeLm
 ```yaml
 patch:
   "engine/filters/@before last": chinese_ime_lm
+  chinese_ime_lm/enable_logging: false  # 默认关闭诊断日志；排查问题时临时改为 true
   translator/enable_correction: true  # 可选：让 Rime 生成邻键误击的纠错候选
   chinese_ime_lm/enable_native_correction: true  # Rime 自带的同排邻键搜索
   chinese_ime_lm/enable_transposition: true  # 本增强版插件：全拼相邻字母颠倒
@@ -189,7 +190,7 @@ patch:
   chinese_ime_lm/aggressive: true  # 更积极生成完整组合候选，默认开启
 ```
 
-将这一项合并到已有 `patch:`，不要覆盖原有设置。自定义滤镜顺序时，把 `chinese_ime_lm` 放在 `uniquifier` 前、文字转换滤镜后。随后重新部署 Rime 并重启 Fcitx 实例。可用 `adb logcat -s ChineseImeLm` 检查模型加载和推理。
+将这一项合并到已有 `patch:`，不要覆盖原有设置。自定义滤镜顺序时，把 `chinese_ime_lm` 放在 `uniquifier` 前、文字转换滤镜后。随后重新部署 Rime 并重启 Fcitx 实例。排查时先临时开启诊断日志，再用 `adb logcat -s ChineseImeLm` 检查模型加载和推理。
 
 内置纠错负责产生替代拼写，小模型比较汉字候选；模型本身不直接改写拼音。新增设置需要本增强插件，原版插件不实现它们。当前不支持通用插入、删除或任意多字母换位。现有手写规则可共存，不要整体覆盖或注释配置。
 
@@ -201,6 +202,7 @@ patch:
 
 | 设置 | 未指定时 | 作用 |
 | --- | --- | --- |
+| `enable_logging` | `false` | 模型成功加载、逐键评分和耗时诊断；失败错误仍输出 |
 | `enable_native_correction` | `true` | 保留 Rime 自带的同排邻键搜索 |
 | `enable_transposition` | `false` | 一次相邻字母交换，如 `suhang → shuang` |
 | `enable_keyboard_neighbors` | 跟随 `enable_transposition` | 按 QWERTY 位置搜索同排和跨排邻键 |
@@ -244,6 +246,17 @@ patch:
 `aggressive` 控制完整组合候选生成，不改变原有首选决定。它复用系统词典和用户词典，保留 4 条中间路径、最多 32 条完整组合，并缓存同一组合中的前缀；提交、取消和删词会清空缓存。老设备上会增加按键耗时，可设为 `false` 关闭。`wozaidadianzi` 已能生成“我再打点字”，但目前仍排得较后，不能保证首选正确。
 
 增强插件的“插件描述”中提供本仓库地址与配置入口，支持中文和英文，点按描述可复制。此次资源已通过 Android 资源编译；完整 APK 中的显示待打包安装复核。
+
+### 诊断日志开关
+
+默认不输出本增强插件的 INFO/DEBUG 诊断，也不读取逐键诊断计时器。需要排查时，在现有同一个 `patch:` 下合并：
+
+```yaml
+patch:
+  chinese_ime_lm/enable_logging: true
+```
+
+改为 `false` 或移除该项即恢复默认关闭。保存后重新部署 Rime，并重启 Fcitx 实例；旧 APK 需要先升级到实现该开关的版本。模型加载失败、无效推理等 ERROR 仍保留；上游 Rime/Fcitx 及系统日志不受此开关控制。滤镜显式别名如 `chinese_ime_lm@my_lm` 使用 `my_lm/enable_logging`。日志开关不影响模型是否加载和参与排序，不记录输入或候选正文。
 
 ## 验证记录
 
