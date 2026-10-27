@@ -51,7 +51,9 @@ add_executable(rime-neural-smoke EXCLUDE_FROM_ALL
     "${NEURAL_DIR}/tests/rime-filter-smoke.cpp"
     "${NEURAL_DIR}/neural-reranker.cpp" ${NEURAL_CORRECTION_SOURCES})
 set_target_properties(rime-neural-smoke PROPERTIES CXX_STANDARD 17)
-target_link_options(rime-neural-smoke PRIVATE "LINKER:--wrap=${NEURAL_SYLLABIFIER_SYMBOL}")
+target_link_options(rime-neural-smoke PRIVATE
+    "LINKER:--wrap=${NEURAL_SYLLABIFIER_SYMBOL}"
+    "LINKER:--wrap=__android_log_print")
 target_include_directories(rime-neural-smoke PRIVATE
     "${NEURAL_DIR}" "${NEURAL_DIR}/vendor/librime/src"
     "${CMAKE_CURRENT_BINARY_DIR}/neural-include"

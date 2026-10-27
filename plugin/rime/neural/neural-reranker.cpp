@@ -118,6 +118,7 @@ public:
         // Our documented custom.yaml settings belong to this component;
         // explicit aliases continue to select their own configuration section.
         if (name_space_ == "filter") name_space_ = "chinese_ime_lm";
+        engine_->schema()->config()->GetBool(name_space_ + "/enable_logging", &logging_);
         engine_->schema()->config()->GetBool(name_space_ + "/aggressive", &aggressive_);
         engine_->schema()->config()->GetBool(name_space_ + "/enable_reranking", &reranking_);
         engine_->schema()->config()->GetBool(name_space_ + "/enable_contextual_reranking", &contextualReranking_);
@@ -135,9 +136,10 @@ public:
         const auto modelPath = customModel ? userDataDirectory + "/" + modelName
             : sharedDataDirectory + "/sentence-model.safetensors";
         model_.reset(cime_load(modelPath.c_str()));
-        __android_log_print(model_ ? ANDROID_LOG_INFO : ANDROID_LOG_ERROR,
-                            kLogTag, "model %s: %s", model_ ? "loaded" : "unavailable",
-                            modelPath.c_str());
+        if (!model_ || logging_)
+            __android_log_print(model_ ? ANDROID_LOG_INFO : ANDROID_LOG_ERROR,
+                                kLogTag, "model %s: %s", model_ ? "loaded" : "unavailable",
+                                modelPath.c_str());
     }
     ~ChineseImeLmFilter() override {
         committed_.disconnect();
@@ -220,7 +222,7 @@ public:
                     }
                     if (priorStatus != 0 || contextStatus != 0)
                         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "invalid contextual inference result");
-                    else
+                    else if (logging_)
                         __android_log_print(ANDROID_LOG_DEBUG, kLogTag,
                             "contextual_scored=%zu promoted=%zu", texts.size(), selected);
                     if (selected > 0)
@@ -236,7 +238,8 @@ public:
         }
         const auto input = ctx->input().substr(first->start(), first->end() - first->start());
 
-        const auto started = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point started;
+        if (logging_) started = std::chrono::steady_clock::now();
         rime::CandidateList candidates;
         std::vector<uint8_t> facts;
         while (!source->exhausted() && candidates.size() < kCandidateCount) {
@@ -275,16 +278,19 @@ public:
             chinese_ime_lm::appendDecodedSentences(candidates, model_.get(),
                 input, context, decoderCache_);
         }
-        const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::steady_clock::now() - started).count();
-        __android_log_print(ANDROID_LOG_DEBUG, kLogTag,
-                            "evaluated=%zu beam_scored=%zu promoted=%d elapsed_us=%lld",
-                            texts.size(), aggressive_ ? decoderCache_.evaluated : 0,
-                            promoted, static_cast<long long>(micros));
+        if (logging_) {
+            const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - started).count();
+            __android_log_print(ANDROID_LOG_DEBUG, kLogTag,
+                                "evaluated=%zu beam_scored=%zu promoted=%d elapsed_us=%lld",
+                                texts.size(), aggressive_ ? decoderCache_.evaluated : 0,
+                                promoted, static_cast<long long>(micros));
+        }
         return rime::New<BufferedTranslation>(std::move(candidates), std::move(source));
     }
 
 private:
+    bool logging_ = false;
     bool aggressive_ = true;
     bool reranking_ = true;
     bool contextualReranking_ = true;
@@ -306,5 +312,4 @@ void registerChineseImeLm(const char *directory, const char *sharedDirectory) {
     rime::Registry::instance().Register("corrector", new NeuralCorrectorComponent);
     rime::Registry::instance().Register("script_translator",
         new rime::Component<chinese_ime_lm::DecodingTranslator>());
-    __android_log_print(ANDROID_LOG_INFO, kLogTag, "Rime filter registered");
 }

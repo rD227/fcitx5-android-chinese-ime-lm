@@ -23,6 +23,30 @@
 #include <iostream>
 #include <stdexcept>
 #include <sstream>
+#include <android/log.h>
+#include <atomic>
+#include <cstdarg>
+#include <cstring>
+
+namespace {
+std::atomic<size_t> diagnosticMessages{0};
+std::atomic<size_t> errorMessages{0};
+}
+
+// Observe real production calls in the explicit test target only. The APK
+// continues to link directly to liblog without this wrapper.
+extern "C" int __wrap___android_log_print(int priority, const char *tag,
+                                         const char *format, ...) {
+    if (tag && std::strcmp(tag, "ChineseImeLm") == 0) {
+        if (priority >= ANDROID_LOG_ERROR) ++errorMessages;
+        else ++diagnosticMessages;
+    }
+    va_list args;
+    va_start(args, format);
+    const int result = __android_log_vprint(priority, tag, format, args);
+    va_end(args);
+    return result;
+}
 
 namespace {
 void require(bool condition, const char *message) {
@@ -144,14 +168,15 @@ void checkAlternatives() {
     require(candidates[1] == valid, "Expansion replaced the original prefix candidate");
 }
 
-void writeSchema(const std::string &directory, const char *id, bool neural) {
+void writeSchema(const std::string &directory, const char *id, bool neural,
+                 const char *filter = "chinese_ime_lm") {
     std::ofstream file(directory + "/" + id + ".schema.yaml");
     file << "schema:\n  schema_id: " << id << "\n  name: smoke\n  version: '1'\n"
             "menu:\n  page_size: 20\n"
             "engine:\n  processors: [speller, selector, express_editor]\n"
             "  segmentors: [abc_segmentor, fallback_segmentor]\n"
             "  translators: [neural_fixture]\n  filters: [";
-    if (neural) file << "chinese_ime_lm, ";
+    if (neural) file << filter << ", ";
     file << "uniquifier]\nspeller:\n  alphabet: abcdefghijklmnopqrstuvwxyz\n";
     require(static_cast<bool>(file), "Cannot write fixture schema");
 }
@@ -392,6 +417,18 @@ int main(int argc, char **argv) {
     std::ofstream(scratch + "/disabled.schema.yaml", std::ios::app) <<
         "chinese_ime_lm:\n  enable_reranking: false\n"
         "  enable_sentence_alternatives: false\n  aggressive: false\n";
+    for (const auto id : {"logging_on", "logging_off", "logging_error"})
+        writeSchema(scratch, id, true);
+    std::ofstream(scratch + "/logging_on.schema.yaml", std::ios::app) <<
+        "chinese_ime_lm:\n  enable_logging: true\n  use_commit_history: false\n";
+    std::ofstream(scratch + "/logging_off.schema.yaml", std::ios::app) <<
+        "chinese_ime_lm:\n  enable_logging: false\n  use_commit_history: false\n";
+    std::ofstream(scratch + "/logging_error.schema.yaml", std::ios::app) <<
+        "chinese_ime_lm:\n  enable_logging: false\n  model: missing-model.safetensors\n";
+    writeSchema(scratch, "logging_alias", true, "chinese_ime_lm@log_alias");
+    std::ofstream(scratch + "/logging_alias.schema.yaml", std::ios::app) <<
+        "chinese_ime_lm:\n  enable_logging: false\n"
+        "log_alias:\n  enable_logging: true\n";
     std::ofstream(scratch + "/default.yaml") <<
         "config_version: '1'\nschema_list:\n  - schema: baseline\n";
 
@@ -412,6 +449,8 @@ int main(int argc, char **argv) {
     require(api->deploy_schema((scratch + "/baseline.schema.yaml").c_str()), "Deploy baseline failed");
     require(api->deploy_schema((scratch + "/neural.schema.yaml").c_str()), "Deploy neural failed");
     require(api->deploy_schema((scratch + "/disabled.schema.yaml").c_str()), "Deploy disabled failed");
+    for (const auto id : {"logging_on", "logging_off", "logging_error", "logging_alias"})
+        require(api->deploy_schema((scratch + "/" + id + ".schema.yaml").c_str()), "Deploy logging schema failed");
     const auto session = api->create_session();
     require(session != 0, "Cannot create Rime session");
     require(api->select_schema(session, "baseline"), "Cannot select baseline");
@@ -448,6 +487,24 @@ int main(int argc, char **argv) {
             std::string(disabledContext.menu.candidates[0].text) == "我在用用看",
             "Custom false flags did not disable reranking/expansion");
     api->free_context(&disabledContext);
+    require(diagnosticMessages == 0, "Diagnostics must be off when enable_logging is absent");
+    require(api->select_schema(session, "logging_on"), "Cannot select logging-on fixture");
+    check(api, session, "abc", "今天天气真好");
+    const size_t logged = diagnosticMessages.load();
+    require(logged > 0, "enable_logging=true did not emit diagnostics");
+    require(api->select_schema(session, "logging_off"), "Cannot select logging-off fixture");
+    check(api, session, "abc", "今天天气真好");
+    require(diagnosticMessages == logged, "enable_logging=false still emitted diagnostics");
+    require(api->select_schema(session, "logging_alias"), "Cannot select logging alias fixture");
+    check(api, session, "abc", "今天天气真好");
+    require(diagnosticMessages > logged, "Logging ignored the explicit filter alias");
+    const size_t beforeFailure = diagnosticMessages.load();
+    const size_t errors = errorMessages.load();
+    require(api->select_schema(session, "logging_error"), "Cannot select missing-model fixture");
+    check(api, session, "abc", "今天天气真号");
+    require(errorMessages > errors, "Model-load errors must remain visible with diagnostics off");
+    require(diagnosticMessages == beforeFailure, "Missing-model fixture emitted disabled diagnostics");
+    std::cout << "PASS: logging defaults off, explicit on/off, alias and retained errors" << std::endl;
     api->destroy_session(session);
     api->finalize();
     std::cout << "PASS: filter ABI, generated sentence promotion, dictionary protection, "
