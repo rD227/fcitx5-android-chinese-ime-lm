@@ -87,6 +87,60 @@ adb install <signed-apk>
 adb shell pm disable-user --user 0 org.fcitx.fcitx5.android.plugin.rime
 ```
 
+### ADB 快速排查与修复
+
+Android 只对**相同包名且签名匹配**的 APK 做覆盖升级。普通包 `org.fcitx.fcitx5.android.plugin.rime` 与增强包 `org.fcitx.fcitx5.android.plugin.rime.neural` 是两个应用，不会互相覆盖；版本名更新也不表示当前加载了增强版。两者提供同名 `rime` 组件，均启用时可能加载普通包。
+
+本分支构建增强包必须带 `-PrimeNeural=true`；未设置时默认生成普通包。在 Android Studio 中构建也需要传入这一 Gradle 项目属性。检查 APK 文件名和安装后的包名，不要只看“Rime”名称。
+
+下面使用 **Windows PowerShell**。先查看设备，再把占位符改成目标手机的序列号；各代码块共用这些变量：
+
+```powershell
+adb devices -l
+$deviceSerial = "<设备序列号>"
+$appPackage = "org.fcitx.fcitx5.android"
+$plainPlugin = "org.fcitx.fcitx5.android.plugin.rime"
+$enhancedPlugin = "org.fcitx.fcitx5.android.plugin.rime.neural"
+
+# 查哪些插件当前处于启用状态，以及各自版本
+adb -s $deviceSerial shell pm list packages -e | Select-String 'plugin\.rime'
+adb -s $deviceSerial shell dumpsys package $plainPlugin | Select-String 'versionCode=|versionName='
+adb -s $deviceSerial shell dumpsys package $enhancedPlugin | Select-String 'versionCode=|versionName='
+```
+
+先打开 Fcitx 并在测试输入框启用 Rime。**有 Root 的手机**还可直接查当前进程加载的库：
+
+```powershell
+$imeProcessId = (adb -s $deviceSerial shell pidof -s $appPackage).Trim()
+adb -s $deviceSerial shell "su -c 'cat /proc/$imeProcessId/maps'" | Select-String 'plugin\.rime.*librime\.so'
+```
+
+库路径应来自 `.plugin.rime.neural-.../lib/.../librime.so`。只有普通 `.plugin.rime-...` 路径，表示当前未加载增强库；出现旧的 `(deleted)` 映射时，也应重启后重新核对。`$PID` 是 PowerShell 系统只读变量，示例使用 `$imeProcessId`。`pidof` 无输出时先确认主程序已经启动。
+
+确认使用本仓库增强插件后，先备份 Rime 用户目录，再完成当前输入并执行以下切换。APK 必须与已安装增强包签名匹配：
+
+```powershell
+$enhancedApk = "C:\path\rime-neural-release.apk"
+adb -s $deviceSerial install -r $enhancedApk
+if ($LASTEXITCODE -ne 0) { throw "增强 APK 安装失败，停止切换插件。" }
+adb -s $deviceSerial shell pm enable --user 0 $enhancedPlugin
+if ($LASTEXITCODE -ne 0) { throw "增强插件未能启用，停止切换插件。" }
+adb -s $deviceSerial shell pm disable-user --user 0 $plainPlugin
+adb -s $deviceSerial shell am force-stop $appPackage
+adb -s $deviceSerial shell am start -n "$appPackage/.ui.main.MainActivity"
+```
+
+普通包保留安装和数据，只是停用；这些命令不改个人 YAML。`INSTALL_FAILED_UPDATE_INCOMPATIBLE` 表示签名不匹配，应使用原签名重新签包。`-r` 不会让不同包名互相覆盖，也不能绕过签名校验。
+
+重启后，在测试输入框切到 Rime 并输入中文，再查**新进程**的模型日志：
+
+```powershell
+$imeProcessId = (adb -s $deviceSerial shell pidof -s $appPackage).Trim()
+adb -s $deviceSerial logcat -d "--pid=$imeProcessId" -s ChineseImeLm
+```
+
+首次加载模型时可看到 `model loaded`；有前文且候选满足比较条件时，新版会输出 `contextual_scored=... promoted=...`，表示实际完成了模型评分。`promoted=0` 表示保留首选，不等于模型未运行；普通词典词也不保证每次都进入评分。模型文件存在、APK 版本号变大、独立探针通过，都不能替代对运行库和当前进程日志的核对。只看安装包/版本、切换包及查日志不需要 Root。
+
 ### 配置文件怎样写
 
 以下入门说明由 agy 的 Gemini 3.8 Flash 起草，再按实际配置接口核对。
