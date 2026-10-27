@@ -42,6 +42,28 @@ constexpr size_t kCandidateCount = 9;
 std::string userDataDirectory;
 std::string sharedDataDirectory;
 
+bool contextualSpellingGraph(const rime::CandidateList &candidates,
+                            const std::string &input, rime::SyllableGraph *graph) {
+    const auto leader = chinese_ime_lm::contextual_ranking_detail::dictionaryPhrase(candidates.front());
+    if (!leader) return false;
+    const bool differentReadings = std::any_of(candidates.begin(), candidates.end(),
+        [&](const auto &candidate) {
+            const auto phrase = chinese_ime_lm::contextual_ranking_detail::dictionaryPhrase(candidate);
+            return phrase && phrase->start() == leader->start() && phrase->end() == leader->end() &&
+                phrase->language() == leader->language() && phrase->code().size() == leader->code().size() &&
+                phrase->code() != leader->code();
+        });
+    if (!differentReadings) return false;
+    const auto found = chinese_ime_lm::decodingTranslators.find(leader->language());
+    if (found == chinese_ime_lm::decodingTranslators.end()) return false;
+    auto *translator = found->second;
+    rime::Syllabifier syllabifier(translator->delimiters(),
+        translator->enable_completion(), translator->strict_spelling());
+    syllabifier.EnableCorrection(translator->corrector());
+    return static_cast<size_t>(syllabifier.BuildSyllableGraph(
+        input, *translator->dict()->prism(), graph)) == input.size();
+}
+
 class NeuralCorrectorComponent final : public rime::Corrector::Component {
 public:
     rime::Corrector *Create(const rime::Ticket &ticket) override {
@@ -99,6 +121,7 @@ public:
         engine_->schema()->config()->GetBool(name_space_ + "/aggressive", &aggressive_);
         engine_->schema()->config()->GetBool(name_space_ + "/enable_reranking", &reranking_);
         engine_->schema()->config()->GetBool(name_space_ + "/enable_contextual_reranking", &contextualReranking_);
+        engine_->schema()->config()->GetBool(name_space_ + "/enable_contextual_abbreviations", &contextualAbbreviations_);
         engine_->schema()->config()->GetBool(name_space_ + "/enable_sentence_alternatives", &alternatives_);
         engine_->schema()->config()->GetBool(name_space_ + "/enable_mixed_abbreviations", &mixedAbbreviations_);
         auto clear = [this](rime::Context *) { decoderCache_.Clear(); };
@@ -168,8 +191,13 @@ public:
                     candidates.push_back(source->Peek());
                     source->Next();
                 }
+                rime::SyllableGraph graph;
+                const auto input = ctx->input().substr(first->start());
+                const bool hasGraph = contextualAbbreviations_ &&
+                    contextualSpellingGraph(candidates, input, &graph);
                 const auto facts = chinese_ime_lm::contextualPhraseFacts(
-                    candidates, first->start(), ctx->input().size(), true);
+                    candidates, first->start(), ctx->input().size(), true,
+                    hasGraph ? &graph : nullptr);
                 if (!facts.empty()) {
                     std::vector<const char *> texts;
                     std::vector<size_t> indices;
@@ -192,6 +220,9 @@ public:
                     }
                     if (priorStatus != 0 || contextStatus != 0)
                         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "invalid contextual inference result");
+                    else
+                        __android_log_print(ANDROID_LOG_DEBUG, kLogTag,
+                            "contextual_scored=%zu promoted=%zu", texts.size(), selected);
                     if (selected > 0)
                         std::rotate(candidates.begin(), candidates.begin() + selected,
                                     candidates.begin() + selected + 1);
@@ -257,6 +288,7 @@ private:
     bool aggressive_ = true;
     bool reranking_ = true;
     bool contextualReranking_ = true;
+    bool contextualAbbreviations_ = true;
     bool alternatives_ = true;
     bool mixedAbbreviations_ = true;
     chinese_ime_lm::DecoderCache decoderCache_;

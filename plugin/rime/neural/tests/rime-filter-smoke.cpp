@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Runs against the same Android prebuilt libraries as the APK. No user data.
 #include "neural-reranker.h"
+#include "contextual-ranking.h"
 #include "sentence-alternatives.h"
 #include "sentence-decoder.h"
 #include "mixed-abbreviations.h"
@@ -26,6 +27,33 @@
 namespace {
 void require(bool condition, const char *message) {
     if (!condition) throw std::runtime_error(message);
+}
+
+void checkAbbreviationPaths() {
+    rime::Spans spans;
+    spans.AddSpan(10, 14);
+    spans.AddSpan(14, 15);
+    rime::SyllableGraph graph;
+    graph.edges[4][5][2].type = rime::kAbbreviation;
+    graph.edges[4][5][3].type = rime::kAbbreviation;
+    rime::Code leader, alternative, differentFullSyllable;
+    leader.assign({1, 2});
+    alternative.assign({1, 3});
+    differentFullSyllable.assign({4, 3});
+    require(chinese_ime_lm::contextualAbbreviations(leader, alternative, spans, 10, graph),
+            "Legitimate abbreviation paths were excluded");
+    graph.edges[4][5][3].is_correction = true;
+    require(!chinese_ime_lm::contextualAbbreviations(leader, alternative, spans, 10, graph),
+            "Corrected reading masqueraded as an abbreviation");
+    graph.edges[4][5][3].is_correction = false;
+    for (const auto type : {rime::kNormalSpelling, rime::kFuzzySpelling, rime::kCompletion}) {
+        graph.edges[4][5][3].type = type;
+        require(!chinese_ime_lm::contextualAbbreviations(leader, alternative, spans, 10, graph),
+                "Non-abbreviation reading became comparable");
+    }
+    graph.edges[4][5][3].type = rime::kAbbreviation;
+    require(!chinese_ime_lm::contextualAbbreviations(leader, differentFullSyllable, spans, 10, graph),
+            "A different full-pinyin syllable became comparable");
 }
 
 long residentKb() {
@@ -230,8 +258,8 @@ int probe(int argc, char **argv) {
     const bool checkFollowing = mode == "--check-following" ||
         mode == "--check-following-reset" || mode == "--check-following-space";
     const bool selectExpected = std::string(argv[1]) == "--check-composition" || checkFollowing;
-    if (selectExpected) require(argc == (checkFollowing ? 9 : 7),
-        "--check-composition <copy> <shared> <schema> <input> <expected> OR --check-following <copy> <shared> <schema> <prefix-input> <prefix-text> <input> <expected-leader>");
+    if (selectExpected) require(checkFollowing ? argc >= 9 && argc % 2 == 1 : argc == 7,
+        "--check-composition <copy> <shared> <schema> <input> <expected> OR --check-following <copy> <shared> <schema> <prefix-input> <prefix-text> ... <input> <expected-leader>");
     auto *api = rime_get_api();
     RIME_STRUCT(RimeTraits, traits);
     traits.user_data_dir = argv[2];
@@ -320,7 +348,7 @@ int probe(int argc, char **argv) {
             }
             if (selectExpected) {
                 require(expectedIndex < count, "Expected complete sentence not generated");
-                if (checkFollowing && index == 7)
+                if (checkFollowing && index == argc - 2)
                     require(expectedIndex == 0, "Following word leader mismatch");
                 require(api->select_candidate(session, expectedIndex), "Cannot select decoded sentence");
                 RIME_STRUCT(RimeCommit, commit);
@@ -328,7 +356,7 @@ int probe(int argc, char **argv) {
                 require(std::string(commit.text) == expected, "Decoded selection changed text identity");
                 api->free_commit(&commit);
                 std::cout << "PASS: decoded sentence selected and committed" << std::endl;
-                if (checkFollowing && index == 5) {
+                if (checkFollowing && index == argc - 4) {
                     if (mode == "--check-following-reset") api->process_key(session, 0xff0d, 0);
                     if (mode == "--check-following-space") api->process_key(session, ' ', 0);
                 }
@@ -342,6 +370,7 @@ int probe(int argc, char **argv) {
 } // namespace
 
 int main(int argc, char **argv) {
+    checkAbbreviationPaths();
     if (argc > 1 && (std::string(argv[1]) == "--probe" ||
                     std::string(argv[1]) == "--check-following" ||
                     std::string(argv[1]) == "--check-following-reset" ||

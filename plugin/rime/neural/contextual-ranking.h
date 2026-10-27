@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include <rime/candidate.h>
+#include <rime/algo/syllabifier.h>
 #include <rime/gear/translator_commons.h>
 #include <cstddef>
 #include <cstdint>
@@ -24,15 +25,41 @@ inline rime::an<rime::Phrase> dictionaryPhrase(
 }
 } // namespace contextual_ranking_detail
 
-// With actual left context, compare only complete dictionary homophones on the
-// leader's original syllable path. Empty means the dictionary protection stays
+// A different reading is comparable only where both paths expand the same
+// original abbreviation. Normal/fuzzy/corrected spelling changes stay excluded.
+inline bool contextualAbbreviations(const rime::Code &leader, const rime::Code &other,
+                                    const rime::Spans &spans, size_t segmentStart,
+                                    const rime::SyllableGraph &graph) {
+    if (leader.size() != other.size()) return false;
+    size_t position = segmentStart;
+    for (size_t index = 0; index < leader.size(); ++index) {
+        const size_t end = spans.NextStop(position);
+        if (leader[index] != other[index]) {
+            const auto startEdge = graph.edges.find(position - segmentStart);
+            if (startEdge == graph.edges.end()) return false;
+            const auto endEdge = startEdge->second.find(end - segmentStart);
+            if (endEdge == startEdge->second.end()) return false;
+            const auto first = endEdge->second.find(leader[index]);
+            const auto second = endEdge->second.find(other[index]);
+            if (first == endEdge->second.end() || second == endEdge->second.end() ||
+                first->second.type != rime::kAbbreviation ||
+                second->second.type != rime::kAbbreviation ||
+                first->second.is_correction || second->second.is_correction) return false;
+        }
+        position = end;
+    }
+    return true;
+}
+
+// With left context, compare complete dictionary homophones or readings that
+// expand the same native abbreviation spans. Empty keeps dictionary protection
 // in force. Bit 0 permits scoring; bit 1 (trusted dictionary) is intentionally
 // absent only for this restricted group. Other candidates have no scoring bits.
 // is_exact_match() rejects predictive completions; it does not mean that the
 // spelling path was free of corrections or schema-defined fuzzy spellings.
 inline std::vector<uint8_t> contextualPhraseFacts(
     const rime::CandidateList &candidates, size_t segmentStart, size_t inputEnd,
-    bool hasContext) {
+    bool hasContext, const rime::SyllableGraph *graph = nullptr) {
     if (!hasContext || candidates.empty()) return {};
     const auto leader = contextual_ranking_detail::dictionaryPhrase(candidates.front());
     if (!leader || leader->start() != segmentStart || leader->end() != inputEnd ||
@@ -46,7 +73,8 @@ inline std::vector<uint8_t> contextualPhraseFacts(
     for (size_t index = 0; index < candidates.size(); ++index) {
         const auto phrase = contextual_ranking_detail::dictionaryPhrase(candidates[index]);
         if (!phrase || phrase->start() != segmentStart || phrase->end() != inputEnd ||
-            phrase->language() != leader->language() || phrase->code() != leader->code())
+            phrase->language() != leader->language() ||
+            phrase->code().size() != leader->code().size())
             continue;
         const auto spans = phrase->spans();
         if (spans.Count() != leaderSpans.Count() || spans.start() != segmentStart ||
@@ -62,6 +90,9 @@ inline std::vector<uint8_t> contextualPhraseFacts(
             position = end;
         }
         if (!sameSpans) continue;
+        if (phrase->code() != leader->code() &&
+            (!graph || !contextualAbbreviations(leader->code(), phrase->code(),
+                                               leaderSpans, segmentStart, *graph))) continue;
         facts[index] = 1;
         hasAlternative |= phrase->text() != leader->text();
     }
