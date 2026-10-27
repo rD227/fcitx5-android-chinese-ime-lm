@@ -87,8 +87,6 @@ adb shell pm disable-user --user 0 org.fcitx.fcitx5.android.plugin.rime
 
 ### 配置文件怎样写
 
-以下入门说明由 agy 的 Gemini 3.8 Flash 起草，再按实际配置接口核对。
-
 1. 确认当前使用的方案 ID。雾凇是 `rime_ice`，编辑前先备份对应文件：
 
    ```text
