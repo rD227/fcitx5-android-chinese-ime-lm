@@ -4,6 +4,8 @@
 
 *此分支增加 Rime 离线中文候选重排插件，构建、启用和授权说明见 [Chinese IME LM](plugin/rime/neural/README.md)。下文保留上游项目介绍和下载链接；上游 APK 不包含本分支的新滤镜*
 
+**雾凇用户配置：[`rime_ice.custom.yaml` 写法、纠错开关与重新部署](plugin/rime/neural/README.md#配置文件怎样写)。**
+
 **AI 协作与移植前请阅读 [AGENT.md](AGENT.md)（[AGENTS.md](AGENTS.md) 为自动发现入口），包含其他 CPU 架构、Rime 版本及预编译库的适配规则。当前仅验证官方主程序 `0.1.3-0-g048f581c` 的 `arm64-v8a` Release；发布说明见 [兼容范围](plugin/rime/neural/RELEASE_NOTES.md)**
 
 [Fcitx5](https://github.com/fcitx/fcitx5) input method framework and engines ported to Android.

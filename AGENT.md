@@ -76,7 +76,7 @@
 
 - 模型只重排已存在的候选。产生拼音纠错候选由 Rime 负责；`translator/enable_correction: true` 是可选方案设置。
 - 只比较覆盖同一段完整原始输入的候选，保留前缀和预测补全的原有语义。
-- 当前保守策略只在首选为生成句子时重排，保留整词首选。不能未经验证移除这个限制来“提高智能”。
+- 默认句子重排保留完整词典首选。`enable_contextual_reranking` 仅在有 Rime 会话前文时比较相同 language、Code、音节边界和输入范围的完整 phrase/user_phrase；相对首选的条件评分优势还须超过无前文优势。保留关闭开关，并验证“还在→排队”与“生日→派对”，不得全局删除 Rust 词典保护。历史不等于编辑器前文；光标、宿主删字和焦点变化可能未同步，本分支在 raw/thru 处截断历史。
 - 重排实际 Candidate 对象，不能只交换显示文字；选词、输入跨度和学习必须一致。
 - 同音整句扩展只复用同一音节 ID 路径上的真实 Phrase/DictEntry，保留原 Sentence 的 syllabifier、组件和输入边界；不得拼接显示文字来冒充可学习的候选。见 `neural/sentence-alternatives.h`。
 - `neural/sentence-decoder.h` 通过现有 ScriptTranslator 复用词典，在选定的全拼路径上搜索不同分词。不得在 Filter 中再创建 Memory/ScriptTranslator，否则会重复订阅提交事件、重复学习。缓存的 DictEntry 必须绑定当前查询的 syllabifier，并在提交、取消和删词时失效。

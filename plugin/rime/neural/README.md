@@ -128,6 +128,7 @@ patch:
   chinese_ime_lm/enable_multiple_typos: true  # 同一音节两处邻键误按，例如 mro → mei
   chinese_ime_lm/enable_distant_neighbors: true  # 一处跨两步键位，例如 vi → xi
   chinese_ime_lm/enable_reranking: true  # 4M 模型比较已有完整候选
+  chinese_ime_lm/enable_contextual_reranking: true  # 有前文时比较同音完整词典词
   chinese_ime_lm/enable_sentence_alternatives: true  # 同音前缀词条扩展
   chinese_ime_lm/enable_mixed_abbreviations: true  # 保留完整音节首选，补充混合简拼词
   chinese_ime_lm/aggressive: true  # 更积极生成完整组合候选，默认开启
@@ -151,6 +152,7 @@ patch:
 | `enable_multiple_typos` | `true` | 邻键搜索内允许两处各一步误按，如 `cue → xie`、`shwbg → sheng` |
 | `enable_distant_neighbors` | `true` | 邻键搜索内允许一处距离为两步的误按，如 `vi → xi` |
 | `enable_reranking` | `true` | 模型重排原有完整候选 |
+| `enable_contextual_reranking` | `true` | 有前文时比较同音完整词典词，并要求前文增强替代词优势 |
 | `enable_sentence_alternatives` | `true` | 用同音前缀词条补充完整句子，参与原有重排 |
 | `enable_mixed_abbreviations` | `true` | 如 `shuo` 补充 `s'huo → 生活`；只查真实双音节词，保留原首选 |
 | `aggressive` | `true` | 重新组合词典分词，补充完整候选供选择 |
@@ -199,6 +201,21 @@ Rust 上游测试、真实权重 FFI 测试和完整输入覆盖测试通过。A
 adb shell pm disable-user --user 0 org.fcitx.fcitx5.android.plugin.rime.neural
 adb shell pm enable org.fcitx.fcitx5.android.plugin.rime
 ```
+
+## 分次输入的上下文重排
+
+先上屏“还在”，再输入 `paidui` 时，增强版可以使用当前 Rime 会话的已提交文字比较“派对 / 排队”。`enable_contextual_reranking` 默认 `true`，要求模型重排开启。只比较相同读音、原始输入范围和音节边界的完整词典候选，保留真实选词与学习身份；不把其他拼音的词混入比较。
+
+模型还会计算不含前文的分数。只有前文增强了替代词相对于原首选的优势，且替代词在当前前文下分数更高，才提升它；避免仅因某个词本身常见就覆盖原来的用户词频。4M 模型仍有判断错误，这个条件不是准确率保证。
+
+在已有 `patch:` 下合并：
+
+```yaml
+  chinese_ime_lm/enable_contextual_reranking: true
+  chinese_ime_lm/use_commit_history: true
+```
+
+第一项设为 `false` 可恢复完整词典首选保护；第二项设为 `false` 后，不使用此前已上屏文字，仅使用当前组合中已选的前文。历史仅来自 Rime 会话内存（最多 20 条，经过 Rime 的未处理回车或退格会清空），本分支遇到原始字母或透传字符也会截断前文；不读取聊天框或其他应用文字、不持久化或记录正文。光标移动、应用直接删字和切换应用不一定清空该历史，因此它不保证等于当前编辑器前文。修改后重新部署 Rime 并重启 Fcitx 实例。测试结果和限制见 [分次输入诊断](CORRECTION.md#分次输入的词典首选与上下文)。
 
 ## 授权
 
